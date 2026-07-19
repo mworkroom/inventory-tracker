@@ -4,11 +4,11 @@
   "description": "집안 재고와 사용 주기를 간단하게 기록합니다.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f4f5f7",
-  "theme_color": "#25b7e8",
+  "background_color": "#ffffff",
+  "theme_color": "#c2c2c2",
   "icons": [
     {
-      "src": "./icon.svg",
+      "src": "./icons/apple-touch-icon.png",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

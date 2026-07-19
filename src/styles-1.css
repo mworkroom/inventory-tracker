@@ -5,15 +5,15 @@
   background: #f4f5f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --bg: #f4f5f7;
+  --bg: #ffffff;
   --panel: #ffffff;
   --text: #111827;
   --muted: #606b78;
   --line: #d9dde3;
   --line-soft: #eceff2;
-  --accent: #25b7e8;
-  --accent-strong: #0aa5dc;
-  --accent-soft: #e8f8fd;
+  --accent: #676767;
+  --accent-strong: #252525;
+  --accent-soft: #c2c2c2;
   --danger: #a12e2e;
   --danger-dot: #e14b4b;
   --danger-soft: #fff1f1;
@@ -59,7 +59,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(37, 183, 232, 0.2);
+  box-shadow: 0 0 0 4px rgba(149, 149, 149, 0.2);
 }
 
 button:disabled {
@@ -100,7 +100,7 @@ button:disabled {
   border-radius: 0 0 var(--radius) var(--radius);
   background: var(--accent);
   color: white;
-  box-shadow: 0 4px 15px rgba(10, 165, 220, 0.18);
+  box-shadow: 0 4px 15px rgba(149, 149, 149, 0.18);
 }
 
 .topbar h1 {
@@ -264,7 +264,7 @@ button:disabled {
 
 .search-wrap input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(37, 183, 232, 0.13);
+  box-shadow: 0 0 0 4px rgba(149, 149, 149, 0.13);
 }
 
 .search-icon {
@@ -332,7 +332,7 @@ button:disabled {
 
 .filter-tabs button.active {
   background: var(--accent-soft);
-  color: #087da8;
+  color: #252525;
 }
 
 .filter-tabs small {
@@ -387,8 +387,8 @@ button:disabled {
 }
 
 .product-card.expanded {
-  border-color: #a9ddec;
-  box-shadow: 0 7px 22px rgba(17, 24, 39, 0.09);
+  border-color: #c2c2c2;
+  box-shadow: 0 7px 22px rgba(149, 149, 149, 0.09);
 }
 
 .product-summary {

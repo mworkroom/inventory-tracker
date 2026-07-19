@@ -27,7 +27,7 @@
 }
 
 .mode-card.selected {
-  border-color: #86d2eb;
+  border-color: #c2c2c2;
   background: var(--accent-soft);
 }
 

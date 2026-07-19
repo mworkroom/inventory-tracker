@@ -449,7 +449,7 @@
 .action-form input:focus,
 .action-form textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(37, 183, 232, 0.13);
+  box-shadow: 0 0 0 4px rgba(149, 149, 149, 0.13);
 }
 
 .form-grid {
