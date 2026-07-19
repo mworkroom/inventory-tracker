@@ -1,6 +1,6 @@
 {
   "name": "우리집 재고",
-  "short_name": "재고",
+  "short_name": "우리집 재고",
   "description": "집안 재고와 사용 주기를 간단하게 기록합니다.",
   "start_url": "./",
   "display": "standalone",
