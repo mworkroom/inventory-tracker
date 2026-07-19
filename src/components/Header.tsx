@@ -45,7 +45,6 @@ export function Header({
           </summary>
           <div className="topbar-menu-panel">
             <p className="topbar-menu-account">
-              <span>로그인한 아이디</span>
               <strong>{email || "확인할 수 없음"}</strong>
             </p>
             <button
