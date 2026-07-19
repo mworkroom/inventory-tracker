@@ -8,9 +8,74 @@
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>우리집 재고</title>
+    <style>
+      .boot-screen {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 24px;
+        background: #f4f5f7;
+        color: #111827;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .boot-card {
+        width: min(420px, 100%);
+        padding: 30px 24px;
+        border: 1px solid #d9dde3;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(17, 24, 39, 0.06);
+        text-align: center;
+      }
+      .boot-card strong { display: block; font-size: 20px; }
+      .boot-card p { margin: 10px 0 0; color: #606b78; font-size: 14px; line-height: 1.6; }
+      .boot-card code { display: block; margin-top: 14px; color: #9b2c2c; overflow-wrap: anywhere; }
+    </style>
+    <script>
+      (() => {
+        let bootTimer;
+
+        function showBootError(message) {
+          const root = document.getElementById("root");
+          if (!root || root.dataset.appMounted === "true") return;
+          window.clearTimeout(bootTimer);
+          root.innerHTML = `
+            <main class="boot-screen">
+              <section class="boot-card" role="alert">
+                <strong>앱을 불러오지 못했습니다</strong>
+                <p>실행 파일 경로나 배포 설정을 확인해주세요. 이제 오류가 나도 흰 화면으로만 남지 않습니다.</p>
+                <code>${String(message || "JavaScript 실행 파일을 불러오지 못했습니다.")}</code>
+              </section>
+            </main>
+          `;
+        }
+
+        window.addEventListener("error", (event) => {
+          if (event.target instanceof HTMLScriptElement || event.error) {
+            showBootError(event.message || "JavaScript 실행 파일을 불러오지 못했습니다.");
+          }
+        }, true);
+
+        window.addEventListener("unhandledrejection", (event) => {
+          const reason = event.reason;
+          showBootError(reason instanceof Error ? reason.message : String(reason));
+        });
+
+        bootTimer = window.setTimeout(() => {
+          showBootError("앱 시작이 8초 안에 완료되지 않았습니다.");
+        }, 8000);
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="boot-screen">
+        <section class="boot-card" data-boot-fallback>
+          <strong>우리집 재고</strong>
+          <p>앱을 불러오고 있습니다.</p>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
