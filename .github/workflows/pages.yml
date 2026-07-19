@@ -49,12 +49,12 @@ jobs:
             exit 1
           fi
 
-          if [[ "$script_src" != /inventory-tracker/assets/* ]]; then
-            echo "Unexpected Pages asset path: $script_src" >&2
+          if [[ "$script_src" != ./assets/* ]]; then
+            echo "Expected a deployment-portable relative asset path, got: $script_src" >&2
             exit 1
           fi
 
-          local_asset="dist/${script_src#/inventory-tracker/}"
+          local_asset="dist/${script_src#./}"
           if [[ ! -s "$local_asset" ]]; then
             echo "Built JavaScript entry is missing: $local_asset" >&2
             exit 1
