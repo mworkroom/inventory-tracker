@@ -35,6 +35,31 @@ jobs:
       - name: Verify and build
         run: npm run verify
 
+      - name: Verify built entry files
+        shell: bash
+        run: |
+          if grep -q '/src/main.tsx' dist/index.html; then
+            echo "dist/index.html still points to Vite source code." >&2
+            exit 1
+          fi
+
+          script_src=$(grep -oE 'src="[^"]+\.js"' dist/index.html | head -n 1 | cut -d '"' -f 2)
+          if [[ -z "$script_src" ]]; then
+            echo "No built JavaScript entry was found in dist/index.html." >&2
+            exit 1
+          fi
+
+          if [[ "$script_src" != /inventory-tracker/assets/* ]]; then
+            echo "Unexpected Pages asset path: $script_src" >&2
+            exit 1
+          fi
+
+          local_asset="dist/${script_src#/inventory-tracker/}"
+          if [[ ! -s "$local_asset" ]]; then
+            echo "Built JavaScript entry is missing: $local_asset" >&2
+            exit 1
+          fi
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
@@ -59,21 +84,48 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live page
+      - name: Verify live page and JavaScript entry
         shell: bash
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           for attempt in {1..12}; do
             status=$(curl --location --silent --show-error --output /tmp/inventory-page.html --write-out "%{http_code}" "$PAGE_URL" || true)
-            if [[ "$status" == "200" ]] && grep -q "우리집 재고" /tmp/inventory-page.html; then
-              printf '{\n  "status": "ok",\n  "url": "%s",\n  "commit": "%s",\n  "verifiedAt": "%s"\n}\n' \
-                "$PAGE_URL" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-status.json
+
+            if [[ "$status" != "200" ]]; then
+              sleep 5
+              continue
+            fi
+
+            if grep -q '/src/main.tsx' /tmp/inventory-page.html; then
+              echo "GitHub Pages is serving raw Vite source instead of dist." >&2
+              exit 1
+            fi
+
+            script_src=$(grep -oE 'src="[^"]+\.js"' /tmp/inventory-page.html | head -n 1 | cut -d '"' -f 2)
+            if [[ -z "$script_src" ]]; then
+              sleep 5
+              continue
+            fi
+
+            asset_url=$(python3 - "$PAGE_URL" "$script_src" <<'PY'
+import sys
+from urllib.parse import urljoin
+print(urljoin(sys.argv[1], sys.argv[2]))
+PY
+)
+
+            asset_status=$(curl --location --silent --show-error --output /tmp/inventory-app.js --write-out "%{http_code}" "$asset_url" || true)
+            if [[ "$asset_status" == "200" ]] && [[ -s /tmp/inventory-app.js ]]; then
+              printf '{\n  "status": "ok",\n  "url": "%s",\n  "assetUrl": "%s",\n  "commit": "%s",\n  "verifiedAt": "%s"\n}\n' \
+                "$PAGE_URL" "$asset_url" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-status.json
               exit 0
             fi
+
             sleep 5
           done
-          echo "Deployed page did not return the expected app." >&2
+
+          echo "Deployed page or JavaScript entry did not become available." >&2
           exit 1
 
       - name: Save deployment verification
