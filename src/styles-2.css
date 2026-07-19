@@ -1,0 +1,471 @@
+
+.status-callout {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 7px;
+  padding: 12px 13px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.status-callout strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.status-callout span {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.status-callout.urgent {
+  border-color: #efc0c0;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.status-callout.okay {
+  border-color: #bde5d3;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.product-info {
+  display: grid;
+  margin: 0;
+}
+
+.info-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid #eef0f2;
+}
+
+.info-row dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.info-row dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: right;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.quick-actions button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.quick-actions button:hover {
+  background: #f7f9fa;
+}
+
+.quick-actions button.quick-action-main {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.quick-actions button.quick-action-main:hover {
+  background: var(--accent-strong);
+}
+
+.quick-actions button > span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.history-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.text-button {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.history-list,
+.cycle-history ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  list-style: none;
+}
+
+.history-list li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 3px 10px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.history-list li:last-child,
+.cycle-history li:last-child {
+  border-bottom: 0;
+}
+
+.history-list span,
+.cycle-history span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.history-list strong,
+.cycle-history strong {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.history-list small {
+  grid-column: 2;
+  color: #7c8693;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 17px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.cycle-history {
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.cycle-history > summary {
+  padding: 11px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.cycle-history ul {
+  margin: 0 10px 10px;
+  border-color: var(--line-soft);
+  background: var(--panel);
+}
+
+.cycle-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  border: 1px solid #efc0c0;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.error-banner button {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #e3abab;
+  border-radius: 6px;
+  background: white;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.empty-state {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 54px 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.empty-state span {
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.empty-add-button {
+  min-width: 160px;
+  margin-top: 12px;
+}
+
+.loading-card {
+  height: 76px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, #fafbfc 25%, #f0f2f4 42%, #fafbfc 60%);
+  background-size: 300% 100%;
+  box-shadow: var(--shadow);
+  animation: loading-shimmer 1.4s infinite linear;
+}
+
+@keyframes loading-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.editor-backdrop,
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.46);
+}
+
+.product-editor,
+.action-dialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 20px 58px rgba(17, 24, 39, 0.26);
+}
+
+.product-editor {
+  padding: 18px;
+}
+
+.action-dialog {
+  width: min(500px, 100%);
+  padding: 18px;
+}
+
+.editor-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.editor-heading > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.editor-heading h2 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.editor-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dialog-product-name {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.icon-button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.product-form,
+.action-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.form-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.form-section h3 {
+  margin: 0 0 1px;
+  font-size: 14px;
+}
+
+.compact-section {
+  background: var(--panel);
+}
+
+.product-form label,
+.action-form label,
+.read-only-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.field-hint,
+.read-only-field small {
+  color: #7c8693;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.product-form input,
+.product-form select,
+.product-form textarea,
+.action-form input,
+.action-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+}
+
+.product-form input,
+.product-form select,
+.action-form input {
+  min-height: 46px;
+  padding: 0 12px;
+}
+
+.product-form textarea,
+.action-form textarea {
+  min-height: 96px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.product-form input:focus,
+.product-form select:focus,
+.product-form textarea:focus,
+.action-form input:focus,
+.action-form textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(37, 183, 232, 0.13);
+}
+
+.form-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.form-grid.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.read-only-field {
+  align-content: center;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
