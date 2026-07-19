@@ -108,14 +108,9 @@ jobs:
               continue
             fi
 
-            asset_url=$(python3 - "$PAGE_URL" "$script_src" <<'PY'
-            import sys
-            from urllib.parse import urljoin
-            print(urljoin(sys.argv[1], sys.argv[2]))
-            PY
-            )
-
+            asset_url=$(python3 -c 'import sys; from urllib.parse import urljoin; print(urljoin(sys.argv[1], sys.argv[2]))' "$PAGE_URL" "$script_src")
             asset_status=$(curl --location --silent --show-error --output /tmp/inventory-app.js --write-out "%{http_code}" "$asset_url" || true)
+
             if [[ "$asset_status" == "200" ]] && [[ -s /tmp/inventory-app.js ]]; then
               printf '{\n  "status": "ok",\n  "url": "%s",\n  "assetUrl": "%s",\n  "commit": "%s",\n  "verifiedAt": "%s"\n}\n' \
                 "$PAGE_URL" "$asset_url" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-status.json
