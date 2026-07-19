@@ -38,7 +38,14 @@ npm run dev
 
 `npm run dev`에서 `'vite'은(는) ... 아닙니다`가 나오면 아직 `npm ci` 또는 `npm install`을 실행하지 않은 상태입니다. Vite는 전역 프로그램이 아니라 이 프로젝트의 `devDependencies`로 설치됩니다.
 
-기본 Supabase 프로젝트가 소스에 연결되어 있습니다. 다른 프로젝트를 쓸 때만 `.env.example`을 참고해 환경변수를 설정합니다.
+`.env.example`을 `.env.local`로 복사하고 로컬에서 사용할 Supabase 값을 설정합니다. 소스 코드에는 프로젝트 URL이나 publishable key 기본값을 두지 않습니다.
+
+GitHub Pages 배포는 저장소 **Settings → Secrets and variables → Actions → Variables**에 등록한 다음 Repository Variables를 빌드 시 주입합니다.
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+```
 
 ```bash
 npm run verify
