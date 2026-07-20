@@ -5,16 +5,30 @@ import { FilterTabs } from "./components/FilterTabs";
 import { Header } from "./components/Header";
 import { ProductCard } from "./components/ProductCard";
 import { ProductEditor } from "./components/ProductEditor";
+import {
+  PurchaseDialog,
+  type PurchaseDialogMode
+} from "./components/PurchaseDialog";
 import { SearchBar } from "./components/SearchBar";
+import { ViewModeToggle } from "./components/ViewModeToggle";
 import { useInventory } from "./hooks/useInventory";
-import { actionPastTense, estimateProduct } from "./lib/inventory";
+import {
+  actionPastTense,
+  calculatePurchaseStats,
+  estimateProduct
+} from "./lib/inventory";
 import type {
   InventoryAction,
   InventoryActionDraft,
   InventoryFilter,
   InventoryProduct,
+  InventoryPurchase,
+  InventoryViewMode,
   ProductDraft,
-  ProductEstimate
+  ProductEstimate,
+  PurchaseBulkDraft,
+  PurchaseDraft,
+  PurchaseStats
 } from "./types";
 
 export default function App() {
@@ -25,17 +39,37 @@ export default function App() {
   );
 }
 
+type PurchaseState = {
+  product: InventoryProduct;
+  mode: PurchaseDialogMode;
+  purchase: InventoryPurchase | null;
+} | null;
+
+interface StoreGroup {
+  key: string;
+  name: string;
+  sortOrder: number;
+  products: InventoryProduct[];
+}
+
 function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const inventory = useInventory(userId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>("all");
+  const [viewMode, setViewMode] = useState<InventoryViewMode>("list");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editorProduct, setEditorProduct] = useState<InventoryProduct | null | undefined>(undefined);
   const [actionState, setActionState] = useState<{
     product: InventoryProduct;
     action: InventoryAction;
   } | null>(null);
+  const [purchaseState, setPurchaseState] = useState<PurchaseState>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const storeById = useMemo(
+    () => new Map(inventory.stores.map((store) => [store.id, store])),
+    [inventory.stores]
+  );
 
   const estimates = useMemo(() => {
     const result = new Map<string, ProductEstimate>();
@@ -44,6 +78,24 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     });
     return result;
   }, [inventory.cycles, inventory.events, inventory.products]);
+
+  const purchaseStats = useMemo(() => {
+    const result = new Map<string, PurchaseStats>();
+    inventory.products.forEach((product) => {
+      result.set(product.id, calculatePurchaseStats(product.id, inventory.purchases));
+    });
+    return result;
+  }, [inventory.products, inventory.purchases]);
+
+  const purchasesByProduct = useMemo(() => {
+    const result = new Map<string, InventoryPurchase[]>();
+    inventory.purchases.forEach((purchase) => {
+      const list = result.get(purchase.product_id) || [];
+      list.push(purchase);
+      result.set(purchase.product_id, list);
+    });
+    return result;
+  }, [inventory.purchases]);
 
   const counts = useMemo(
     () => ({
@@ -62,7 +114,10 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         if (filter === "urgent" && !estimate?.isUrgent) return false;
         if (filter === "learning" && !estimate?.isLearning) return false;
         if (!normalizedQuery) return true;
-        return `${product.name} ${product.notes || ""}`
+        const storeName = product.preferred_store_id
+          ? storeById.get(product.preferred_store_id)?.name || ""
+          : "";
+        return `${product.name} ${product.notes || ""} ${storeName}`
           .toLocaleLowerCase("ko-KR")
           .includes(normalizedQuery);
       })
@@ -72,7 +127,30 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         if (aUrgent !== bUrgent) return bUrgent - aUrgent;
         return a.name.localeCompare(b.name, "ko-KR");
       });
-  }, [estimates, filter, inventory.products, query]);
+  }, [estimates, filter, inventory.products, query, storeById]);
+
+  const storeGroups = useMemo<StoreGroup[]>(() => {
+    const groups = new Map<string, StoreGroup>();
+
+    visibleProducts.forEach((product) => {
+      const store = product.preferred_store_id
+        ? storeById.get(product.preferred_store_id) || null
+        : null;
+      const key = store?.id || "unassigned";
+      const current = groups.get(key) || {
+        key,
+        name: store?.name || "구매처 미지정",
+        sortOrder: store?.sort_order ?? Number.MAX_SAFE_INTEGER,
+        products: []
+      };
+      current.products.push(product);
+      groups.set(key, current);
+    });
+
+    return [...groups.values()].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko-KR")
+    );
+  }, [storeById, visibleProducts]);
 
   async function saveProduct(draft: ProductDraft) {
     const saved = editorProduct
@@ -95,6 +173,36 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     showToast(`${saved.name} ${actionPastTense(actionState.action)} 기록했습니다.`);
   }
 
+  async function savePurchase(draft: PurchaseDraft) {
+    if (!purchaseState || purchaseState.mode === "bulk") return;
+    if (purchaseState.mode === "edit" && purchaseState.purchase) {
+      await inventory.updatePurchase(purchaseState.purchase, draft);
+      showToast("구매 기록을 수정했습니다.");
+    } else {
+      await inventory.createPurchase(purchaseState.product, draft);
+      showToast("구매 기록을 저장했습니다.");
+    }
+    setExpandedId(purchaseState.product.id);
+    setPurchaseState(null);
+  }
+
+  async function savePurchaseBatch(draft: PurchaseBulkDraft) {
+    if (!purchaseState || purchaseState.mode !== "bulk") return;
+    const count = await inventory.createPurchaseBatch(purchaseState.product, draft);
+    setExpandedId(purchaseState.product.id);
+    setPurchaseState(null);
+    showToast(`과거 구매 기록 ${count}건을 저장했습니다.`);
+  }
+
+  async function deletePurchase() {
+    if (!purchaseState?.purchase) return;
+    const productId = purchaseState.product.id;
+    await inventory.deletePurchase(purchaseState.purchase);
+    setExpandedId(productId);
+    setPurchaseState(null);
+    showToast("구매 기록을 삭제했습니다.");
+  }
+
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => {
@@ -109,10 +217,43 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   async function backup() {
     try {
       await inventory.exportBackup();
-      showToast("전체 기록을 JSON 백업 파일로 저장했습니다.");
+      showToast("재고와 구매 기록을 JSON 백업 파일로 저장했습니다.");
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "백업 파일을 만들지 못했습니다.");
     }
+  }
+
+  function renderProductCard(product: InventoryProduct) {
+    return (
+      <ProductCard
+        key={product.id}
+        product={product}
+        estimate={estimates.get(product.id) || estimateProduct(product, [], [])}
+        purchaseStats={
+          purchaseStats.get(product.id) || calculatePurchaseStats(product.id, [])
+        }
+        events={inventory.events}
+        cycles={inventory.cycles}
+        purchases={purchasesByProduct.get(product.id) || []}
+        stores={inventory.stores}
+        expanded={expandedId === product.id}
+        busy={inventory.busy}
+        onToggle={() =>
+          setExpandedId((current) => (current === product.id ? null : product.id))
+        }
+        onAction={(action) => setActionState({ product, action })}
+        onEdit={() => setEditorProduct(product)}
+        onPurchaseAdd={() =>
+          setPurchaseState({ product, mode: "single", purchase: null })
+        }
+        onPurchaseBulk={() =>
+          setPurchaseState({ product, mode: "bulk", purchase: null })
+        }
+        onPurchaseEdit={(purchase) =>
+          setPurchaseState({ product, mode: "edit", purchase })
+        }
+      />
+    );
   }
 
   return (
@@ -129,6 +270,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
       <section className="inventory-controls" aria-label="재고 검색과 필터">
         <SearchBar value={query} onChange={setQuery} />
         <FilterTabs value={filter} counts={counts} onChange={setFilter} />
+        <ViewModeToggle value={viewMode} onChange={setViewMode} />
       </section>
 
       {inventory.error ? (
@@ -142,9 +284,11 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
 
       <div className="list-heading">
         <span>
-          {query || filter !== "all"
-            ? `${visibleProducts.length}개 표시 중`
-            : `제품 ${inventory.products.length}개`}
+          {viewMode === "store"
+            ? `구매처 ${storeGroups.length}곳 · 제품 ${visibleProducts.length}개`
+            : query || filter !== "all"
+              ? `${visibleProducts.length}개 표시 중`
+              : `제품 ${inventory.products.length}개`}
         </span>
         {inventory.lastLoadedAt ? (
           <small>
@@ -164,24 +308,41 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           ))}
         </div>
       ) : visibleProducts.length ? (
-        <section className="product-list" aria-label="재고 목록">
-          {visibleProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              estimate={estimates.get(product.id) || estimateProduct(product, [], [])}
-              events={inventory.events}
-              cycles={inventory.cycles}
-              expanded={expandedId === product.id}
-              busy={inventory.busy}
-              onToggle={() =>
-                setExpandedId((current) => (current === product.id ? null : product.id))
-              }
-              onAction={(action) => setActionState({ product, action })}
-              onEdit={() => setEditorProduct(product)}
-            />
-          ))}
-        </section>
+        viewMode === "store" ? (
+          <section className="store-groups" aria-label="주구매처별 재고 목록">
+            {storeGroups.map((group) => {
+              const urgentCount = group.products.filter(
+                (product) => estimates.get(product.id)?.isUrgent
+              ).length;
+              const soonCount = group.products.filter((product) => {
+                const days = purchaseStats.get(product.id)?.daysUntilNextPurchase;
+                return days !== null && days !== undefined && days <= 30;
+              }).length;
+
+              return (
+                <section key={group.key} className="store-group">
+                  <header className="store-group-heading">
+                    <div>
+                      <strong>{group.name}</strong>
+                      <span>{group.products.length}개</span>
+                    </div>
+                    <small>
+                      {urgentCount > 0 ? `구매 필요 ${urgentCount}` : "구매 필요 없음"}
+                      {soonCount > 0 ? ` · 30일 안 예상 ${soonCount}` : ""}
+                    </small>
+                  </header>
+                  <div className="product-list">
+                    {group.products.map(renderProductCard)}
+                  </div>
+                </section>
+              );
+            })}
+          </section>
+        ) : (
+          <section className="product-list" aria-label="재고 목록">
+            {visibleProducts.map(renderProductCard)}
+          </section>
+        )
       ) : inventory.products.length === 0 ? (
         <section className="empty-state">
           <strong>아직 등록한 제품이 없습니다.</strong>
@@ -200,6 +361,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
       {editorProduct !== undefined ? (
         <ProductEditor
           product={editorProduct}
+          stores={inventory.stores}
           busy={inventory.busy}
           onClose={() => setEditorProduct(undefined)}
           onSubmit={saveProduct}
@@ -213,6 +375,20 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           busy={inventory.busy}
           onClose={() => setActionState(null)}
           onSubmit={saveAction}
+        />
+      ) : null}
+
+      {purchaseState ? (
+        <PurchaseDialog
+          product={purchaseState.product}
+          stores={inventory.stores}
+          purchase={purchaseState.purchase}
+          mode={purchaseState.mode}
+          busy={inventory.busy}
+          onClose={() => setPurchaseState(null)}
+          onSubmitSingle={savePurchase}
+          onSubmitBulk={savePurchaseBatch}
+          onDelete={purchaseState.mode === "edit" ? deletePurchase : null}
         />
       ) : null}
 

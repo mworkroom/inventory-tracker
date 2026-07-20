@@ -1,16 +1,28 @@
 import { useEffect, useState } from "react";
 import { formatQuantity, todayIso } from "../lib/inventory";
-import type { InventoryProduct, ProductDraft, TrackingMode } from "../types";
+import type {
+  InventoryProduct,
+  InventoryStore,
+  ProductDraft,
+  TrackingMode
+} from "../types";
 import { CloseIcon } from "./Icons";
 
 interface ProductEditorProps {
   product: InventoryProduct | null;
+  stores: InventoryStore[];
   busy: boolean;
   onClose: () => void;
   onSubmit: (draft: ProductDraft) => Promise<void>;
 }
 
-export function ProductEditor({ product, busy, onClose, onSubmit }: ProductEditorProps) {
+export function ProductEditor({
+  product,
+  stores,
+  busy,
+  onClose,
+  onSubmit
+}: ProductEditorProps) {
   const [draft, setDraft] = useState<ProductDraft>(() => makeDraft(product));
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -134,6 +146,19 @@ export function ProductEditor({ product, busy, onClose, onSubmit }: ProductEdito
                 placeholder="예: 코코넛 오일"
                 onChange={(event) => update("name", event.target.value)}
               />
+            </label>
+            <label>
+              <span className="field-label">주구매처 · 선택</span>
+              <select
+                value={draft.preferredStoreId}
+                onChange={(event) => update("preferredStoreId", event.target.value)}
+              >
+                <option value="">미지정</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
+              <span className="field-hint">구매처별 보기에서 이 제품이 묶일 위치입니다.</span>
             </label>
           </section>
 
@@ -296,7 +321,7 @@ export function ProductEditor({ product, busy, onClose, onSubmit }: ProductEdito
             <span className="field-label">메모 · 선택</span>
             <textarea
               value={draft.notes}
-              placeholder="선호 구매처나 제품 설명"
+              placeholder="제품 설명이나 보관 메모"
               onChange={(event) => update("notes", event.target.value)}
             />
           </label>
@@ -359,6 +384,7 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
     packageSize: product?.package_size === null || product?.package_size === undefined ? "" : String(product.package_size),
     capacityUnit,
     currentConsumerCount: String(product?.current_consumer_count ?? 1),
+    preferredStoreId: product?.preferred_store_id || "",
     notes: product?.notes || "",
     occurredOn: todayIso()
   };

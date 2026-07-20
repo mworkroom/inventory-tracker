@@ -1,7 +1,9 @@
 import type {
   InventoryEvent,
   InventoryProduct,
+  InventoryPurchase,
   ProductEstimate,
+  PurchaseStats,
   UsageCycle
 } from "../types";
 
@@ -174,6 +176,103 @@ function estimateCountProduct(
   };
 }
 
+export function calculatePurchaseStats(
+  productId: string,
+  purchases: InventoryPurchase[],
+  today = todayIso()
+): PurchaseStats {
+  const productPurchases = purchases.filter(
+    (purchase) => purchase.product_id === productId
+  );
+  const uniqueDates = [...new Set(productPurchases.map((purchase) => purchase.purchased_on))]
+    .sort(compareIsoDate);
+  const intervals: number[] = [];
+
+  for (let index = 1; index < uniqueDates.length; index += 1) {
+    const interval = daysBetween(uniqueDates[index - 1], uniqueDates[index]);
+    if (interval > 0) intervals.push(interval);
+  }
+
+  const recentIntervals = intervals.slice(-7);
+  const medianIntervalDays = median(recentIntervals);
+  const lastPurchasedOn = uniqueDates.at(-1) ?? null;
+  const nextPurchaseDate =
+    lastPurchasedOn && medianIntervalDays !== null
+      ? addDays(lastPurchasedOn, Math.round(medianIntervalDays))
+      : null;
+
+  return {
+    purchaseCount: productPurchases.length,
+    purchaseDateCount: uniqueDates.length,
+    intervalSampleCount: recentIntervals.length,
+    medianIntervalDays,
+    lastPurchasedOn,
+    nextPurchaseDate,
+    daysUntilNextPurchase:
+      nextPurchaseDate === null ? null : daysBetween(today, nextPurchaseDate)
+  };
+}
+
+export function parsePurchaseDates(
+  input: string,
+  maxDate = todayIso()
+): string[] {
+  const lines = input
+    .split(/[\n,]+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    throw new Error("구매 날짜를 한 줄에 하나씩 입력해주세요.");
+  }
+
+  const invalidLines: string[] = [];
+  const normalizedDates: string[] = [];
+
+  for (const line of lines) {
+    const normalized = normalizePurchaseDate(line);
+    if (!normalized || normalized > maxDate) {
+      invalidLines.push(line);
+      continue;
+    }
+    normalizedDates.push(normalized);
+  }
+
+  if (invalidLines.length > 0) {
+    const preview = invalidLines.slice(0, 3).join(", ");
+    throw new Error(`날짜 형식을 확인해주세요: ${preview}`);
+  }
+
+  return [...new Set(normalizedDates)].sort(compareIsoDate);
+}
+
+function normalizePurchaseDate(value: string): string | null {
+  const compactMatch = value.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const koreanMatch = value.match(
+    /^(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?\s*\.?$/
+  );
+  const separatedMatch = value.match(
+    /^(\d{4})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{1,2})\s*\.?$/
+  );
+  const match = compactMatch || koreanMatch || separatedMatch;
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function median(values: number[]): number | null {
   const valid = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (valid.length === 0) return null;
@@ -205,6 +304,11 @@ export function formatQuantity(value: number): string {
   return new Intl.NumberFormat("ko-KR", {
     maximumFractionDigits: 3
   }).format(value);
+}
+
+export function formatCurrency(value: number | null): string {
+  if (value === null) return "—";
+  return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}원`;
 }
 
 export function formatApproxDays(value: number | null): string {
