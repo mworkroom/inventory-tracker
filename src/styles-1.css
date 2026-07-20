@@ -172,7 +172,7 @@ button:disabled {
   z-index: 40;
   top: calc(100% + 8px);
   right: 0;
-  width: min(260px, calc(100vw - 24px));
+  width: min(360px, calc(100vw - 24px));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);

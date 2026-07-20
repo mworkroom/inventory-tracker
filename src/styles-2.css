@@ -422,11 +422,22 @@
 .action-form input,
 .action-form textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
   color: var(--text);
   outline: none;
+}
+
+.product-form input[type="date"],
+.action-form input[type="date"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: 10px;
 }
 
 .product-form input,

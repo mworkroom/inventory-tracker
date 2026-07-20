@@ -201,6 +201,8 @@
 .action-form select {
   width: 100%;
   min-height: 46px;
+  min-width: 0;
+  max-width: 100%;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
