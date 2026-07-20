@@ -4,7 +4,9 @@ import { RefreshIcon, SettingsIcon } from "./Icons";
 interface HeaderProps {
   email: string | null;
   busy: boolean;
+  archivedCount: number;
   onAdd: () => void;
+  onOpenArchived: () => void;
   onRefresh: () => void;
   onBackup: () => void;
   onSignOut: () => Promise<void>;
@@ -13,7 +15,9 @@ interface HeaderProps {
 export function Header({
   email,
   busy,
+  archivedCount,
   onAdd,
+  onOpenArchived,
   onRefresh,
   onBackup,
   onSignOut
@@ -47,6 +51,14 @@ export function Header({
             <p className="topbar-menu-account">
               <strong>{email || "확인할 수 없음"}</strong>
             </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runAndClose(onOpenArchived)}
+            >
+              보관된 제품
+              {archivedCount > 0 ? <small className="menu-count">{archivedCount}</small> : null}
+            </button>
             <button
               type="button"
               disabled={busy}

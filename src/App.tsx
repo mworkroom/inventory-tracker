@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ActionDialog } from "./components/ActionDialog";
+import { ArchivedProductsDialog } from "./components/ArchivedProductsDialog";
 import { AuthGate, type AuthorizedContext } from "./components/AuthGate";
 import { FilterTabs } from "./components/FilterTabs";
 import { Header } from "./components/Header";
@@ -12,6 +13,7 @@ import {
 import { SearchBar } from "./components/SearchBar";
 import { ViewModeToggle } from "./components/ViewModeToggle";
 import { useInventory } from "./hooks/useInventory";
+import { useProductLifecycle } from "./hooks/useProductLifecycle";
 import {
   actionPastTense,
   calculatePurchaseStats,
@@ -20,6 +22,7 @@ import {
 import type {
   InventoryAction,
   InventoryActionDraft,
+  InventoryEvent,
   InventoryFilter,
   InventoryProduct,
   InventoryPurchase,
@@ -28,7 +31,8 @@ import type {
   ProductEstimate,
   PurchaseBulkDraft,
   PurchaseDraft,
-  PurchaseStats
+  PurchaseStats,
+  UsageCycle
 } from "./types";
 
 export default function App() {
@@ -54,6 +58,7 @@ interface StoreGroup {
 
 function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const inventory = useInventory(userId);
+  const lifecycle = useProductLifecycle();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [viewMode, setViewMode] = useState<InventoryViewMode>("list");
@@ -64,7 +69,9 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     action: InventoryAction;
   } | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseState>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const busy = inventory.busy || lifecycle.busy;
 
   const storeById = useMemo(
     () => new Map(inventory.stores.map((store) => [store.id, store])),
@@ -152,6 +159,15 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     );
   }, [storeById, visibleProducts]);
 
+  const editorCanDelete = editorProduct
+    ? canDeleteUnusedProduct(
+        editorProduct,
+        inventory.events,
+        inventory.cycles,
+        inventory.purchases
+      )
+    : false;
+
   async function saveProduct(draft: ProductDraft) {
     const saved = editorProduct
       ? await inventory.updateProduct(editorProduct, draft)
@@ -203,6 +219,32 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     showToast("구매 기록을 삭제했습니다.");
   }
 
+  async function archiveEditedProduct() {
+    if (!editorProduct) return;
+    const name = editorProduct.name;
+    await lifecycle.archiveProduct(editorProduct);
+    await inventory.refresh(true);
+    setEditorProduct(undefined);
+    setExpandedId(null);
+    showToast(`${name}을 보관했습니다.`);
+  }
+
+  async function deleteEditedProduct() {
+    if (!editorProduct) return;
+    const name = editorProduct.name;
+    await lifecycle.deleteUnusedProduct(editorProduct);
+    await inventory.refresh(true);
+    setEditorProduct(undefined);
+    setExpandedId(null);
+    showToast(`${name}을 영구 삭제했습니다.`);
+  }
+
+  async function restoreArchivedProduct(product: InventoryProduct) {
+    await lifecycle.restoreProduct(product);
+    await inventory.refresh(true);
+    showToast(`${product.name}을 목록으로 복원했습니다.`);
+  }
+
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => {
@@ -211,7 +253,9 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   }
 
   function refresh() {
-    void inventory.refresh().then(() => showToast("최신 재고를 불러왔습니다."));
+    void Promise.all([inventory.refresh(), lifecycle.refreshArchived()]).then(() =>
+      showToast("최신 재고를 불러왔습니다.")
+    );
   }
 
   async function backup() {
@@ -237,7 +281,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         purchases={purchasesByProduct.get(product.id) || []}
         stores={inventory.stores}
         expanded={expandedId === product.id}
-        busy={inventory.busy}
+        busy={busy}
         onToggle={() =>
           setExpandedId((current) => (current === product.id ? null : product.id))
         }
@@ -260,8 +304,13 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     <main className="app-shell">
       <Header
         email={email}
-        busy={inventory.busy}
+        busy={busy}
+        archivedCount={lifecycle.archivedProducts.length}
         onAdd={() => setEditorProduct(null)}
+        onOpenArchived={() => {
+          setArchivedOpen(true);
+          void lifecycle.refreshArchived();
+        }}
         onRefresh={refresh}
         onBackup={backup}
         onSignOut={signOut}
@@ -362,9 +411,12 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         <ProductEditor
           product={editorProduct}
           stores={inventory.stores}
-          busy={inventory.busy}
+          busy={busy}
+          canDelete={editorCanDelete}
           onClose={() => setEditorProduct(undefined)}
           onSubmit={saveProduct}
+          onArchive={editorProduct ? archiveEditedProduct : null}
+          onDelete={editorProduct ? deleteEditedProduct : null}
         />
       ) : null}
 
@@ -372,7 +424,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         <ActionDialog
           product={actionState.product}
           action={actionState.action}
-          busy={inventory.busy}
+          busy={busy}
           onClose={() => setActionState(null)}
           onSubmit={saveAction}
         />
@@ -384,7 +436,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           stores={inventory.stores}
           purchase={purchaseState.purchase}
           mode={purchaseState.mode}
-          busy={inventory.busy}
+          busy={busy}
           onClose={() => setPurchaseState(null)}
           onSubmitSingle={savePurchase}
           onSubmitBulk={savePurchaseBatch}
@@ -392,7 +444,41 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         />
       ) : null}
 
+      {archivedOpen ? (
+        <ArchivedProductsDialog
+          products={lifecycle.archivedProducts}
+          stores={inventory.stores}
+          loading={lifecycle.loading}
+          busy={busy}
+          error={lifecycle.error}
+          onClose={() => setArchivedOpen(false)}
+          onRestore={restoreArchivedProduct}
+        />
+      ) : null}
+
       {toast ? <div className="toast" role="status">{toast}</div> : null}
     </main>
+  );
+}
+
+function canDeleteUnusedProduct(
+  product: InventoryProduct,
+  events: InventoryEvent[],
+  cycles: UsageCycle[],
+  purchases: InventoryPurchase[]
+): boolean {
+  if (product.active_opened_on) return false;
+
+  const productEvents = events.filter((event) => event.product_id === product.id);
+  const hasOnlyInitialEvent =
+    productEvents.length === 1 &&
+    productEvents[0].event_type === "adjustment" &&
+    productEvents[0].quantity_before === 0 &&
+    productEvents[0].note === "최초 재고 등록";
+
+  return (
+    hasOnlyInitialEvent &&
+    !cycles.some((cycle) => cycle.product_id === product.id) &&
+    !purchases.some((purchase) => purchase.product_id === product.id)
   );
 }

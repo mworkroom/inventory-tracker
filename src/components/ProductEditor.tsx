@@ -12,23 +12,31 @@ interface ProductEditorProps {
   product: InventoryProduct | null;
   stores: InventoryStore[];
   busy: boolean;
+  canDelete: boolean;
   onClose: () => void;
   onSubmit: (draft: ProductDraft) => Promise<void>;
+  onArchive: (() => Promise<void>) | null;
+  onDelete: (() => Promise<void>) | null;
 }
 
 export function ProductEditor({
   product,
   stores,
   busy,
+  canDelete,
   onClose,
-  onSubmit
+  onSubmit,
+  onArchive,
+  onDelete
 }: ProductEditorProps) {
   const [draft, setDraft] = useState<ProductDraft>(() => makeDraft(product));
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"archive" | "delete" | null>(null);
 
   useEffect(() => {
     setDraft(makeDraft(product));
     setFormError(null);
+    setConfirmAction(null);
   }, [product]);
 
   useEffect(() => {
@@ -112,9 +120,42 @@ export function ProductEditor({
     }
   }
 
+  async function archiveProduct() {
+    if (!onArchive) return;
+    if (confirmAction !== "archive") {
+      setConfirmAction("archive");
+      return;
+    }
+
+    setFormError(null);
+    try {
+      await onArchive();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : "제품을 보관하지 못했습니다.");
+      setConfirmAction(null);
+    }
+  }
+
+  async function deleteProduct() {
+    if (!onDelete || !canDelete) return;
+    if (confirmAction !== "delete") {
+      setConfirmAction("delete");
+      return;
+    }
+
+    setFormError(null);
+    try {
+      await onDelete();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : "제품을 삭제하지 못했습니다.");
+      setConfirmAction(null);
+    }
+  }
+
   const isEdit = Boolean(product);
   const isCapacity = draft.trackingMode === "cycle";
   const stockUnit = isCapacity ? draft.capacityUnit : draft.unitLabel;
+  const archiveDisabled = Boolean(product?.active_opened_on);
 
   return (
     <div
@@ -332,6 +373,53 @@ export function ProductEditor({
             <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>취소</button>
             <button type="submit" className="primary-button" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
           </div>
+
+          {isEdit ? (
+            <section className="product-management-section">
+              <div className="product-management-heading">
+                <h3>제품 관리</h3>
+                <p>기록을 보존하려면 삭제 대신 보관을 사용합니다.</p>
+              </div>
+
+              <div className="product-management-action">
+                <div>
+                  <strong>제품 보관</strong>
+                  <span>
+                    {archiveDisabled
+                      ? "현재 사용 중인 제품은 다 쓴 뒤 보관할 수 있습니다."
+                      : "기본 목록에서만 숨기고 모든 재고·사용·구매 기록은 유지합니다."}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={confirmAction === "archive" ? "management-confirm-button" : "secondary-button"}
+                  disabled={busy || archiveDisabled}
+                  onClick={() => void archiveProduct()}
+                >
+                  {confirmAction === "archive" ? "한 번 더 눌러 보관" : "제품 보관"}
+                </button>
+              </div>
+
+              <div className="product-management-action delete-action">
+                <div>
+                  <strong>잘못 만든 제품 삭제</strong>
+                  <span>
+                    {canDelete
+                      ? "최초 등록 외의 실사용·구매 기록이 없어 영구 삭제할 수 있습니다."
+                      : "실사용 또는 구매 기록이 있어 삭제할 수 없습니다. 제품 보관을 사용해주세요."}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={confirmAction === "delete" ? "danger-confirm-button" : "danger-outline-button"}
+                  disabled={busy || !canDelete}
+                  onClick={() => void deleteProduct()}
+                >
+                  {confirmAction === "delete" ? "한 번 더 눌러 영구 삭제" : "영구 삭제"}
+                </button>
+              </div>
+            </section>
+          ) : null}
         </form>
       </section>
     </div>
