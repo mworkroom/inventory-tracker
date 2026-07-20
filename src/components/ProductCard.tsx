@@ -1,6 +1,7 @@
 import {
   eventLabel,
   formatApproxDays,
+  formatCurrency,
   formatDate,
   formatQuantity
 } from "../lib/inventory";
@@ -8,7 +9,10 @@ import type {
   InventoryAction,
   InventoryEvent,
   InventoryProduct,
+  InventoryPurchase,
+  InventoryStore,
   ProductEstimate,
+  PurchaseStats,
   UsageCycle
 } from "../types";
 import { ChevronIcon } from "./Icons";
@@ -16,25 +20,37 @@ import { ChevronIcon } from "./Icons";
 interface ProductCardProps {
   product: InventoryProduct;
   estimate: ProductEstimate;
+  purchaseStats: PurchaseStats;
   events: InventoryEvent[];
   cycles: UsageCycle[];
+  purchases: InventoryPurchase[];
+  stores: InventoryStore[];
   expanded: boolean;
   busy: boolean;
   onToggle: () => void;
   onAction: (action: InventoryAction) => void;
   onEdit: () => void;
+  onPurchaseAdd: () => void;
+  onPurchaseBulk: () => void;
+  onPurchaseEdit: (purchase: InventoryPurchase) => void;
 }
 
 export function ProductCard({
   product,
   estimate,
+  purchaseStats,
   events,
   cycles,
+  purchases,
+  stores,
   expanded,
   busy,
   onToggle,
   onAction,
-  onEdit
+  onEdit,
+  onPurchaseAdd,
+  onPurchaseBulk,
+  onPurchaseEdit
 }: ProductCardProps) {
   const productEvents = events
     .filter((event) => event.product_id === product.id)
@@ -42,6 +58,11 @@ export function ProductCard({
   const productCycles = cycles
     .filter((cycle) => cycle.product_id === product.id)
     .slice(0, 3);
+  const recentPurchases = purchases.slice(0, 5);
+  const storeById = new Map(stores.map((store) => [store.id, store]));
+  const preferredStoreName = product.preferred_store_id
+    ? storeById.get(product.preferred_store_id)?.name || "구매처 미확인"
+    : null;
   const isCapacity = product.tracking_mode === "cycle";
   const currentMeta = `${formatQuantity(product.current_quantity)}${product.unit_label}`;
 
@@ -62,6 +83,7 @@ export function ProductCard({
           <span className="product-summary-meta">
             현재 {currentMeta}
             {product.active_opened_on ? " · 사용 중" : ""}
+            {preferredStoreName ? ` · ${preferredStoreName}` : ""}
           </span>
         </span>
         <ChevronIcon className="product-chevron" />
@@ -145,6 +167,31 @@ export function ProductCard({
                 value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
               />
             ) : null}
+            <InfoRow label="주구매처" value={preferredStoreName || "미지정"} />
+            <InfoRow
+              label="구매 기록"
+              value={
+                purchaseStats.purchaseCount > 0
+                  ? `${purchaseStats.purchaseCount}회 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
+                  : "아직 없음"
+              }
+            />
+            <InfoRow
+              label="평소 구매 간격"
+              value={
+                purchaseStats.medianIntervalDays === null
+                  ? purchaseStats.purchaseDateCount > 0
+                    ? "날짜가 2개 이상 필요함"
+                    : "과거 기록을 입력하면 계산"
+                  : `${formatApproxDays(purchaseStats.medianIntervalDays)} · 간격 ${purchaseStats.intervalSampleCount}개 기준`
+              }
+            />
+            {purchaseStats.nextPurchaseDate ? (
+              <InfoRow
+                label="다음 구매 예상"
+                value={formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)}
+              />
+            ) : null}
             {product.notes ? <InfoRow label="메모" value={product.notes} /> : null}
           </dl>
 
@@ -184,9 +231,19 @@ export function ProductCard({
             </button>
           </div>
 
+          <div className="purchase-actions" aria-label={`${product.name} 구매 기록`}>
+            <button type="button" className="purchase-action-main" disabled={busy} onClick={onPurchaseAdd}>
+              구매 기록
+            </button>
+            <button type="button" disabled={busy} onClick={onPurchaseBulk}>
+              과거 기록 한꺼번에
+            </button>
+          </div>
+          <p className="purchase-action-note">구매 기록은 현재 재고를 바꾸지 않습니다.</p>
+
           <section className="history-section">
             <div className="section-heading">
-              <h3>최근 기록</h3>
+              <h3>최근 재고 기록</h3>
               <button type="button" className="text-button" disabled={busy} onClick={onEdit}>
                 제품 설정
               </button>
@@ -203,6 +260,37 @@ export function ProductCard({
               </ul>
             ) : (
               <p className="history-empty">아직 기록이 없습니다.</p>
+            )}
+          </section>
+
+          <section className="purchase-history-section">
+            <div className="section-heading">
+              <h3>최근 구매 기록</h3>
+              <span>{purchaseStats.purchaseCount}회</span>
+            </div>
+            {recentPurchases.length ? (
+              <ul className="purchase-history-list">
+                {recentPurchases.map((purchase) => {
+                  const storeName = storeById.get(purchase.store_id)?.name || "구매처 미확인";
+                  return (
+                    <li key={purchase.id}>
+                      <button type="button" disabled={busy} onClick={() => onPurchaseEdit(purchase)}>
+                        <span>{formatDate(purchase.purchased_on)} · {storeName}</span>
+                        <strong>{formatPurchaseAmount(purchase, product)}</strong>
+                        {purchase.total_price !== null || purchase.shipping_fee !== null ? (
+                          <small>
+                            {purchase.total_price !== null ? `총 ${formatCurrency(purchase.total_price)}` : ""}
+                            {purchase.shipping_fee !== null ? `${purchase.total_price !== null ? " · " : ""}배송비 ${formatCurrency(purchase.shipping_fee)}` : ""}
+                          </small>
+                        ) : null}
+                        {purchase.note ? <em>{purchase.note}</em> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="history-empty">아직 구매 기록이 없습니다.</p>
             )}
           </section>
 
@@ -236,4 +324,21 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function formatDecimal(value: number): string {
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatPurchaseAmount(
+  purchase: InventoryPurchase,
+  product: InventoryProduct
+): string {
+  const countUnit = product.tracking_mode === "count" ? product.unit_label : "개";
+  const count = `${formatQuantity(purchase.package_count)}${countUnit}`;
+  if (purchase.package_size === null || !purchase.package_unit) return count;
+  return `${count} · ${formatQuantity(purchase.package_size)}${purchase.package_unit}씩`;
+}
+
+function formatPurchaseForecast(date: string, daysUntil: number | null): string {
+  if (daysUntil === null) return formatDate(date);
+  if (daysUntil < 0) return `${formatDate(date)} · ${Math.abs(daysUntil)}일 지남`;
+  if (daysUntil === 0) return `${formatDate(date)} · 오늘`;
+  return `${formatDate(date)} · ${daysUntil}일 후`;
 }
