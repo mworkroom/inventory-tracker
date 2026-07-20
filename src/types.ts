@@ -1,6 +1,17 @@
 export type TrackingMode = "count" | "cycle";
 export type InventoryEventType = "intake" | "use" | "open" | "finish" | "adjustment";
 export type InventoryFilter = "all" | "urgent" | "learning";
+export type InventoryViewMode = "list" | "store";
+
+export interface InventoryStore {
+  id: string;
+  workspace_id: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
 
 export interface InventoryProduct {
   id: string;
@@ -16,6 +27,7 @@ export interface InventoryProduct {
   current_consumer_count: number;
   active_opened_on: string | null;
   active_consumer_count: number | null;
+  preferred_store_id: string | null;
   notes: string | null;
   is_archived: boolean;
   created_by: string | null;
@@ -53,6 +65,24 @@ export interface UsageCycle {
   created_at: string;
 }
 
+export interface InventoryPurchase {
+  id: string;
+  workspace_id: string;
+  product_id: string;
+  store_id: string;
+  purchased_on: string;
+  package_count: number;
+  package_size: number | null;
+  package_unit: string | null;
+  total_price: number | null;
+  shipping_fee: number | null;
+  note: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductDraft {
   name: string;
   trackingMode: TrackingMode;
@@ -63,6 +93,7 @@ export interface ProductDraft {
   packageSize: string;
   capacityUnit: string;
   currentConsumerCount: string;
+  preferredStoreId: string;
   notes: string;
   occurredOn: string;
 }
@@ -77,6 +108,26 @@ export interface InventoryActionDraft {
   note: string;
 }
 
+export interface PurchaseDraft {
+  purchasedOn: string;
+  storeId: string;
+  packageCount: string;
+  packageSize: string;
+  packageUnit: string;
+  totalPrice: string;
+  shippingFee: string;
+  note: string;
+}
+
+export interface PurchaseBulkDraft {
+  datesText: string;
+  storeId: string;
+  packageCount: string;
+  packageSize: string;
+  packageUnit: string;
+  note: string;
+}
+
 export interface ProductEstimate {
   isUrgent: boolean;
   urgentReason: string | null;
@@ -88,4 +139,14 @@ export interface ProductEstimate {
   perPersonDailyCapacity: number | null;
   cycleSampleCount: number;
   useSampleCount: number;
+}
+
+export interface PurchaseStats {
+  purchaseCount: number;
+  purchaseDateCount: number;
+  intervalSampleCount: number;
+  medianIntervalDays: number | null;
+  lastPurchasedOn: string | null;
+  nextPurchaseDate: string | null;
+  daysUntilNextPurchase: number | null;
 }
