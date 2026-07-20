@@ -26,7 +26,7 @@ export function estimateProduct(
 
   const base =
     product.tracking_mode === "cycle"
-      ? estimateCycleProduct(product, productCycles, today)
+      ? estimateCapacityProduct(product, productCycles, today)
       : estimateCountProduct(product, productEvents, today);
 
   const quantityUrgent = product.current_quantity <= product.low_stock_threshold;
@@ -48,7 +48,7 @@ export function estimateProduct(
   };
 }
 
-function estimateCycleProduct(
+function estimateCapacityProduct(
   product: InventoryProduct,
   cycles: UsageCycle[],
   today: string
@@ -74,19 +74,26 @@ function estimateCycleProduct(
   const expectedCycleDays = median(adjustedDurations);
   let remainingDays: number | null = null;
 
-  if (expectedCycleDays !== null) {
-    const activeUnits = product.active_opened_on ? 1 : 0;
-    const unopenedUnits = Math.max(0, product.current_quantity - activeUnits);
-    let activeRemaining = 0;
+  if (expectedCycleDays !== null && expectedCycleDays > 0) {
+    if (product.package_size && product.package_size > 0) {
+      const dailyCapacity = product.package_size / expectedCycleDays;
+      let estimatedRemainingCapacity = Math.max(0, product.current_quantity);
 
-    if (product.active_opened_on) {
-      const elapsedDays = Math.max(1, daysBetween(product.active_opened_on, today) + 1);
-      activeRemaining = Math.max(0, expectedCycleDays - elapsedDays);
-    }
+      if (product.active_opened_on) {
+        const elapsedDays = Math.max(0, daysBetween(product.active_opened_on, today));
+        const estimatedUsedFromOpen = Math.min(
+          product.package_size,
+          elapsedDays * dailyCapacity
+        );
+        estimatedRemainingCapacity = Math.max(
+          0,
+          estimatedRemainingCapacity - estimatedUsedFromOpen
+        );
+      }
 
-    remainingDays = activeRemaining + unopenedUnits * expectedCycleDays;
-    if (!product.active_opened_on) {
-      remainingDays = product.current_quantity * expectedCycleDays;
+      remainingDays = estimatedRemainingCapacity / dailyCapacity;
+    } else {
+      remainingDays = Math.max(0, product.current_quantity * expectedCycleDays);
     }
   }
 
