@@ -42,7 +42,7 @@ export function ProductCard({
   const productCycles = cycles
     .filter((cycle) => cycle.product_id === product.id)
     .slice(0, 3);
-  const isCycle = product.tracking_mode === "cycle";
+  const isCapacity = product.tracking_mode === "cycle";
   const currentMeta = `${formatQuantity(product.current_quantity)}${product.unit_label}`;
 
   return (
@@ -83,13 +83,13 @@ export function ProductCard({
           </div>
 
           <dl className="product-info">
-            <InfoRow label="현재 재고" value={`${currentMeta}${product.active_opened_on ? " · 1개 사용 중" : ""}`} />
+            <InfoRow label="현재 재고" value={`${currentMeta}${product.active_opened_on ? " · 사용 중" : ""}`} />
             <InfoRow
-              label="기록 방식"
-              value={isCycle ? "개봉일부터 소진일까지" : "사용할 때 수량 차감"}
+              label="재고 기준"
+              value={isCapacity ? "용량으로 관리" : "개수로 관리"}
             />
 
-            {isCycle ? (
+            {isCapacity ? (
               <>
                 <InfoRow
                   label="현재 제품"
@@ -139,9 +139,9 @@ export function ProductCard({
               label="구매 기준"
               value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
             />
-            {product.package_size && product.capacity_unit ? (
+            {isCapacity && product.package_size && product.capacity_unit ? (
               <InfoRow
-                label="제품 용량"
+                label="제품 1개 용량"
                 value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
               />
             ) : null}
@@ -153,7 +153,7 @@ export function ProductCard({
               <span aria-hidden="true">＋</span>
               입고
             </button>
-            {isCycle ? (
+            {isCapacity ? (
               product.active_opened_on ? (
                 <button type="button" className="quick-action-main" disabled={busy} onClick={() => onAction("finish")}>
                   다 씀
@@ -162,10 +162,10 @@ export function ProductCard({
                 <button
                   type="button"
                   className="quick-action-main"
-                  disabled={busy || product.current_quantity < 1}
+                  disabled={busy || product.current_quantity <= 0}
                   onClick={() => onAction("open")}
                 >
-                  새 통 개봉
+                  새 제품 개봉
                 </button>
               )
             ) : (
