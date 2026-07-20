@@ -126,7 +126,7 @@ export function useInventory(userId: string): InventoryState {
                 ? parseOptionalNumber(draft.packageSize)
                 : null,
             p_capacity_unit:
-              draft.trackingMode === "cycle" && draft.packageSize.trim()
+              draft.trackingMode === "cycle"
                 ? draft.capacityUnit.trim()
                 : null,
             p_current_consumer_count:
@@ -157,29 +157,26 @@ export function useInventory(userId: string): InventoryState {
       setBusy(true);
       setError(null);
       try {
-        const packageSize =
-          product.tracking_mode === "cycle"
-            ? parseOptionalNumber(draft.packageSize)
-            : null;
+        const isCapacity = product.tracking_mode === "cycle";
+        const packageSize = isCapacity
+          ? parseOptionalNumber(draft.packageSize)
+          : null;
+        const capacityUnit = isCapacity ? draft.capacityUnit.trim() : null;
         const { data, error: updateError } = await supabase
           .from("inventory_products")
           .update({
             name: draft.name.trim(),
-            unit_label: draft.unitLabel.trim(),
+            unit_label: isCapacity ? capacityUnit : draft.unitLabel.trim(),
             package_size: packageSize,
-            capacity_unit:
-              product.tracking_mode === "cycle" && packageSize !== null
-                ? draft.capacityUnit.trim()
-                : null,
+            capacity_unit: capacityUnit,
             low_stock_threshold: parseRequiredNumber(
               draft.lowStockThreshold,
               "구매 기준"
             ),
             alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-            current_consumer_count:
-              product.tracking_mode === "cycle"
-                ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
-                : 1,
+            current_consumer_count: isCapacity
+              ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
+              : 1,
             notes: draft.notes.trim() || null,
             updated_by: userId
           })
