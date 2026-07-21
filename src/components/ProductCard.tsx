@@ -63,8 +63,13 @@ export function ProductCard({
   const preferredStoreName = product.preferred_store_id
     ? storeById.get(product.preferred_store_id)?.name || "구매처 미확인"
     : null;
-  const isCapacity = product.tracking_mode === "cycle";
+  const isCycle = product.tracking_mode === "cycle";
+  const isCapacity = product.tracking_mode === "capacity";
+  const hasActiveProduct = Boolean(
+    product.active_opened_on || product.active_remaining_quantity !== null
+  );
   const currentMeta = `${formatQuantity(product.current_quantity)}${product.unit_label}`;
+  const activeMeta = formatActiveMeta(product);
 
   return (
     <article className={`product-card${expanded ? " expanded" : ""}`}>
@@ -82,7 +87,7 @@ export function ProductCard({
           <strong>{product.name}</strong>
           <span className="product-summary-meta">
             현재 {currentMeta}
-            {product.active_opened_on ? " · 사용 중" : ""}
+            {hasActiveProduct ? " · 사용 중" : ""}
             {preferredStoreName ? ` · ${preferredStoreName}` : ""}
           </span>
         </span>
@@ -97,7 +102,9 @@ export function ProductCard({
               {estimate.isUrgent
                 ? estimate.urgentReason
                 : estimate.isLearning
-                  ? "사용 기록을 쌓는 중입니다. 구매 기준 수량으로 먼저 판단하고 있어요."
+                  ? isCycle
+                    ? "개봉·소진 기록을 쌓는 중입니다. 구매 기준 개수로 먼저 판단하고 있어요."
+                    : "사용 기록을 쌓는 중입니다. 구매 기준 수량으로 먼저 판단하고 있어요."
                   : estimate.remainingDays !== null
                     ? `현재 사용 속도 기준 ${formatApproxDays(estimate.remainingDays)}분이 남았습니다.`
                     : "설정한 구매 기준보다 재고가 많습니다."}
@@ -105,24 +112,15 @@ export function ProductCard({
           </div>
 
           <dl className="product-info">
-            <InfoRow label="현재 재고" value={`${currentMeta}${product.active_opened_on ? " · 사용 중" : ""}`} />
             <InfoRow
-              label="재고 기준"
-              value={isCapacity ? "용량으로 관리" : "개수로 관리"}
+              label="현재 재고"
+              value={`${currentMeta}${hasActiveProduct ? " · 사용 중 제품 포함" : ""}`}
             />
+            <InfoRow label="기록 방식" value={trackingModeLabel(product)} />
 
-            {isCapacity ? (
+            {isCycle ? (
               <>
-                <InfoRow
-                  label="현재 제품"
-                  value={
-                    product.active_opened_on
-                      ? `${formatDate(product.active_opened_on)} 개봉 · ${product.active_consumer_count || product.current_consumer_count}명 사용`
-                      : product.current_quantity > 0
-                        ? "아직 개봉 기록 없음"
-                        : "사용 중인 제품 없음"
-                  }
-                />
+                <InfoRow label="현재 제품" value={activeMeta} />
                 <InfoRow
                   label="학습한 주기"
                   value={
@@ -135,6 +133,12 @@ export function ProductCard({
                   <InfoRow
                     label="1인 사용량"
                     value={`하루 약 ${formatDecimal(estimate.perPersonDailyCapacity)}${product.capacity_unit}`}
+                  />
+                ) : null}
+                {product.package_size && product.capacity_unit ? (
+                  <InfoRow
+                    label="제품 1개 용량"
+                    value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
                   />
                 ) : null}
               </>
@@ -161,12 +165,6 @@ export function ProductCard({
               label="구매 기준"
               value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
             />
-            {isCapacity && product.package_size && product.capacity_unit ? (
-              <InfoRow
-                label="제품 1개 용량"
-                value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
-              />
-            ) : null}
             <InfoRow label="주구매처" value={preferredStoreName || "미지정"} />
             <InfoRow
               label="구매 기록"
@@ -189,20 +187,28 @@ export function ProductCard({
             {purchaseStats.nextPurchaseDate ? (
               <InfoRow
                 label="다음 구매 예상"
-                value={formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)}
+                value={formatPurchaseForecast(
+                  purchaseStats.nextPurchaseDate,
+                  purchaseStats.daysUntilNextPurchase
+                )}
               />
             ) : null}
             {product.notes ? <InfoRow label="메모" value={product.notes} /> : null}
           </dl>
 
-          <div className="quick-actions" aria-label={`${product.name} 빠른 기록`}>
+          <div className={`quick-actions${isCycle ? " cycle-actions" : ""}`} aria-label={`${product.name} 빠른 기록`}>
             <button type="button" disabled={busy} onClick={() => onAction("intake")}>
               <span aria-hidden="true">＋</span>
               입고
             </button>
-            {isCapacity ? (
+            {isCycle ? (
               product.active_opened_on ? (
-                <button type="button" className="quick-action-main" disabled={busy} onClick={() => onAction("finish")}>
+                <button
+                  type="button"
+                  className="quick-action-main"
+                  disabled={busy}
+                  onClick={() => onAction("finish")}
+                >
                   다 씀
                 </button>
               ) : (
@@ -212,7 +218,9 @@ export function ProductCard({
                   disabled={busy || product.current_quantity <= 0}
                   onClick={() => onAction("open")}
                 >
-                  새 제품 개봉
+                  {product.active_remaining_quantity !== null
+                    ? "개봉 정보 입력"
+                    : "새 제품 개봉"}
                 </button>
               )
             ) : (
@@ -226,10 +234,21 @@ export function ProductCard({
                 사용
               </button>
             )}
+            {isCycle && product.active_opened_on ? (
+              <button type="button" disabled={busy} onClick={() => onAction("remainder")}>
+                현재 잔량
+              </button>
+            ) : null}
             <button type="button" disabled={busy} onClick={() => onAction("adjustment")}>
               재고 정정
             </button>
           </div>
+
+          {isCycle ? (
+            <p className="cycle-action-note">
+              입고는 통·병·봉 개수만 늘립니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다.
+            </p>
+          ) : null}
 
           <div className="purchase-actions" aria-label={`${product.name} 구매 기록`}>
             <button type="button" className="purchase-action-main" disabled={busy} onClick={onPurchaseAdd}>
@@ -253,7 +272,9 @@ export function ProductCard({
                 {productEvents.map((event) => (
                   <li key={event.id}>
                     <span>{formatDate(event.occurred_on)}</span>
-                    <strong>{eventLabel(event, product.unit_label)}</strong>
+                    <strong>
+                      {eventLabel(event, product.unit_label, product.capacity_unit)}
+                    </strong>
                     {event.note ? <small>{event.note}</small> : null}
                   </li>
                 ))}
@@ -280,7 +301,9 @@ export function ProductCard({
                         {purchase.total_price !== null || purchase.shipping_fee !== null ? (
                           <small>
                             {purchase.total_price !== null ? `총 ${formatCurrency(purchase.total_price)}` : ""}
-                            {purchase.shipping_fee !== null ? `${purchase.total_price !== null ? " · " : ""}배송비 ${formatCurrency(purchase.shipping_fee)}` : ""}
+                            {purchase.shipping_fee !== null
+                              ? `${purchase.total_price !== null ? " · " : ""}배송비 ${formatCurrency(purchase.shipping_fee)}`
+                              : ""}
                           </small>
                         ) : null}
                         {purchase.note ? <em>{purchase.note}</em> : null}
@@ -296,7 +319,9 @@ export function ProductCard({
 
           {productCycles.length ? (
             <details className="cycle-history">
-              <summary>완료된 사용 주기 {cycles.filter((cycle) => cycle.product_id === product.id).length}회</summary>
+              <summary>
+                완료된 사용 주기 {cycles.filter((cycle) => cycle.product_id === product.id).length}회
+              </summary>
               <ul>
                 {productCycles.map((cycle) => (
                   <li key={cycle.id}>
@@ -322,6 +347,35 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function trackingModeLabel(product: InventoryProduct): string {
+  switch (product.tracking_mode) {
+    case "cycle":
+      return `개수 재고 + 개봉·소진 (${product.unit_label})`;
+    case "capacity":
+      return `용량 직접 차감 (${product.unit_label})`;
+    case "count":
+    default:
+      return `개수 직접 차감 (${product.unit_label})`;
+  }
+}
+
+function formatActiveMeta(product: InventoryProduct): string {
+  const remaining =
+    product.active_remaining_quantity !== null && product.capacity_unit
+      ? ` · 약 ${formatQuantity(product.active_remaining_quantity)}${product.capacity_unit} 남음`
+      : "";
+
+  if (product.active_opened_on) {
+    return `${formatDate(product.active_opened_on)} 개봉 · ${product.active_consumer_count || product.current_consumer_count}명 사용${remaining}`;
+  }
+  if (product.active_remaining_quantity !== null) {
+    return `현재 잔량${remaining} · 개봉일 미입력`;
+  }
+  return product.current_quantity > 0
+    ? "아직 개봉한 제품 없음"
+    : "사용 중인 제품 없음";
+}
+
 function formatDecimal(value: number): string {
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
 }
@@ -330,15 +384,18 @@ function formatPurchaseAmount(
   purchase: InventoryPurchase,
   product: InventoryProduct
 ): string {
-  const countUnit = product.tracking_mode === "count" ? product.unit_label : "개";
+  const countUnit = product.tracking_mode === "capacity" ? "개" : product.unit_label;
   const count = `${formatQuantity(purchase.package_count)}${countUnit}`;
   if (purchase.package_size === null || !purchase.package_unit) return count;
   return `${count} · ${formatQuantity(purchase.package_size)}${purchase.package_unit}씩`;
 }
 
-function formatPurchaseForecast(date: string, daysUntil: number | null): string {
+function formatPurchaseForecast(
+  date: string,
+  daysUntil: number | null
+): string {
   if (daysUntil === null) return formatDate(date);
-  if (daysUntil < 0) return `${formatDate(date)} · ${Math.abs(daysUntil)}일 지남`;
+  if (daysUntil < 0) return `${formatDate(date)} · 예상일에서 ${Math.abs(daysUntil)}일 지남`;
   if (daysUntil === 0) return `${formatDate(date)} · 오늘`;
   return `${formatDate(date)} · ${daysUntil}일 후`;
 }

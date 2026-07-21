@@ -1,5 +1,11 @@
-export type TrackingMode = "count" | "cycle";
-export type InventoryEventType = "intake" | "use" | "open" | "finish" | "adjustment";
+export type TrackingMode = "count" | "cycle" | "capacity";
+export type InventoryEventType =
+  | "intake"
+  | "use"
+  | "open"
+  | "finish"
+  | "remainder"
+  | "adjustment";
 export type InventoryFilter = "all" | "urgent" | "learning";
 export type InventoryViewMode = "list" | "store";
 
@@ -27,6 +33,8 @@ export interface InventoryProduct {
   current_consumer_count: number;
   active_opened_on: string | null;
   active_consumer_count: number | null;
+  active_remaining_quantity: number | null;
+  active_remaining_updated_on: string | null;
   preferred_store_id: string | null;
   notes: string | null;
   is_archived: boolean;
