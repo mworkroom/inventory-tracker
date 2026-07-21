@@ -437,14 +437,32 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding-inline: 10px;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
 }
 
-.product-form input,
+.product-form input[type="date"]::-webkit-date-and-time-value,
+.action-form input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: left;
+}
+
+.product-form input:not([type="date"]),
 .product-form select,
-.action-form input {
+.action-form input:not([type="date"]) {
   min-height: 46px;
   padding: 0 12px;
+}
+
+.product-form select,
+.action-form select {
+  min-height: 54px;
+  padding: 0 14px;
 }
 
 .product-form textarea,

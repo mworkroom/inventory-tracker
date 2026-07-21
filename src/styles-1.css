@@ -194,7 +194,7 @@ button:disabled {
   display: grid;
   gap: 4px;
   margin: 0;
-  padding: 13px 14px;
+  padding: 16px 16px;
   border-bottom: 1px solid var(--line);
   background: #f8fafb;
 }
@@ -215,15 +215,15 @@ button:disabled {
 .topbar-menu-panel > button {
   display: flex;
   width: 100%;
-  min-height: 44px;
+  min-height: 56px;
   align-items: center;
   gap: 8px;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 0;
   border-bottom: 1px solid var(--line-soft);
   background: var(--panel);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   text-align: left;
 }
