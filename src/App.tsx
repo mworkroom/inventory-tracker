@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ActionDialog } from "./components/ActionDialog";
+import { ActiveUsageDialog } from "./components/ActiveUsageDialog";
 import { ArchivedProductsDialog } from "./components/ArchivedProductsDialog";
 import { AuthGate, type AuthorizedContext } from "./components/AuthGate";
 import { FilterTabs } from "./components/FilterTabs";
@@ -21,6 +22,7 @@ import {
   estimateProduct
 } from "./lib/inventory";
 import type {
+  ActiveUsageDraft,
   InventoryAction,
   InventoryActionDraft,
   InventoryEvent,
@@ -51,6 +53,11 @@ type PurchaseState = {
   purchase: InventoryPurchase | null;
 } | null;
 
+type UsageCycleState = {
+  product: InventoryProduct;
+  cycle: UsageCycle | null;
+} | null;
+
 interface StoreGroup {
   key: string;
   name: string;
@@ -58,12 +65,14 @@ interface StoreGroup {
   products: InventoryProduct[];
 }
 
+type CategoryGroup = Omit<StoreGroup, "sortOrder">;
+
 function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const inventory = useInventory(userId);
   const lifecycle = useProductLifecycle();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>("all");
-  const [viewMode, setViewMode] = useState<InventoryViewMode>("list");
+  const [viewMode, setViewMode] = useState<InventoryViewMode>("store");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editorProduct, setEditorProduct] = useState<InventoryProduct | null | undefined>(undefined);
   const [actionState, setActionState] = useState<{
@@ -71,7 +80,8 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     action: InventoryAction;
   } | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseState>(null);
-  const [usageCycleProduct, setUsageCycleProduct] = useState<InventoryProduct | null>(null);
+  const [activeUsageProduct, setActiveUsageProduct] = useState<InventoryProduct | null>(null);
+  const [usageCycleState, setUsageCycleState] = useState<UsageCycleState>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const busy = inventory.busy || lifecycle.busy;
@@ -136,7 +146,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         const storeName = product.preferred_store_id
           ? storeById.get(product.preferred_store_id)?.name || ""
           : "";
-        return `${product.name} ${product.notes || ""} ${storeName}`
+        return `${product.name} ${product.category || ""} ${product.notes || ""} ${storeName}`
           .toLocaleLowerCase("ko-KR")
           .includes(normalizedQuery);
       })
@@ -170,6 +180,24 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
       (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko-KR")
     );
   }, [storeById, visibleProducts]);
+
+  const categoryGroups = useMemo<CategoryGroup[]>(() => {
+    const groups = new Map<string, CategoryGroup>();
+
+    visibleProducts.forEach((product) => {
+      const category = product.category?.trim() || "미분류";
+      const key = category.toLocaleLowerCase("ko-KR");
+      const current = groups.get(key) || {
+        key,
+        name: category,
+        products: []
+      };
+      current.products.push(product);
+      groups.set(key, current);
+    });
+
+    return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+  }, [visibleProducts]);
 
   const editorCanDelete = editorProduct
     ? canDeleteUnusedProduct(
@@ -223,11 +251,33 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   }
 
   async function saveUsageCycle(draft: UsageCycleDraft) {
-    if (!usageCycleProduct) return;
-    await inventory.createUsageCycle(usageCycleProduct, draft);
-    setExpandedId(usageCycleProduct.id);
-    setUsageCycleProduct(null);
-    showToast("과거 사용 주기를 저장했습니다.");
+    if (!usageCycleState) return;
+    if (usageCycleState.cycle) {
+      await inventory.updateUsageCycle(usageCycleState.cycle, draft);
+      showToast("사용 주기를 수정했습니다.");
+    } else {
+      await inventory.createUsageCycle(usageCycleState.product, draft);
+      showToast("과거 사용 주기를 저장했습니다.");
+    }
+    setExpandedId(usageCycleState.product.id);
+    setUsageCycleState(null);
+  }
+
+  async function saveActiveUsage(draft: ActiveUsageDraft) {
+    if (!activeUsageProduct) return;
+    const saved = await inventory.updateActiveUsage(activeUsageProduct, draft);
+    setExpandedId(saved.id);
+    setActiveUsageProduct(null);
+    showToast("사용 중 정보와 개봉 기록을 함께 수정했습니다.");
+  }
+
+  async function deleteUsageCycle() {
+    if (!usageCycleState?.cycle) return;
+    const productId = usageCycleState.product.id;
+    await inventory.deleteUsageCycle(usageCycleState.cycle);
+    setExpandedId(productId);
+    setUsageCycleState(null);
+    showToast("사용 주기를 삭제했습니다.");
   }
 
   async function deletePurchase() {
@@ -315,6 +365,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           setExpandedId((current) => (current === product.id ? null : product.id))
         }
         onAction={(action) => setActionState({ product, action })}
+        onActiveUsageEdit={() => setActiveUsageProduct(product)}
         onEdit={() => setEditorProduct(product)}
         onPurchaseAdd={() =>
           setPurchaseState({ product, mode: "single", purchase: null })
@@ -325,10 +376,13 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         onPurchaseEdit={(purchase) =>
           setPurchaseState({ product, mode: "edit", purchase })
         }
-        onUsageCycleAdd={() => setUsageCycleProduct(product)}
+        onUsageCycleAdd={() => setUsageCycleState({ product, cycle: null })}
+        onUsageCycleEdit={(cycle) => setUsageCycleState({ product, cycle })}
       />
     );
   }
+
+  const activeGroups = viewMode === "store" ? storeGroups : categoryGroups;
 
   return (
     <main className="app-shell">
@@ -365,6 +419,8 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         <span>
           {viewMode === "store"
             ? `구매처 ${storeGroups.length}곳 · 제품 ${visibleProducts.length}개`
+            : viewMode === "category"
+              ? `카테고리 ${categoryGroups.length}개 · 제품 ${visibleProducts.length}개`
             : query || filter !== "all"
               ? `${visibleProducts.length}개 표시 중`
               : `제품 ${inventory.products.length}개`}
@@ -387,9 +443,12 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           ))}
         </div>
       ) : visibleProducts.length ? (
-        viewMode === "store" ? (
-          <section className="store-groups" aria-label="주구매처별 재고 목록">
-            {storeGroups.map((group) => {
+        viewMode === "store" || viewMode === "category" ? (
+          <section
+            className="store-groups"
+            aria-label={viewMode === "store" ? "주구매처별 재고 목록" : "카테고리별 재고 목록"}
+          >
+            {activeGroups.map((group) => {
               const urgentCount = group.products.filter(
                 (product) => estimates.get(product.id)?.isUrgent
               ).length;
@@ -474,12 +533,23 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         />
       ) : null}
 
-      {usageCycleProduct ? (
-        <UsageCycleDialog
-          product={usageCycleProduct}
+      {activeUsageProduct ? (
+        <ActiveUsageDialog
+          product={activeUsageProduct}
           busy={busy}
-          onClose={() => setUsageCycleProduct(null)}
+          onClose={() => setActiveUsageProduct(null)}
+          onSubmit={saveActiveUsage}
+        />
+      ) : null}
+
+      {usageCycleState ? (
+        <UsageCycleDialog
+          product={usageCycleState.product}
+          cycle={usageCycleState.cycle}
+          busy={busy}
+          onClose={() => setUsageCycleState(null)}
           onSubmit={saveUsageCycle}
+          onDelete={usageCycleState.cycle ? deleteUsageCycle : null}
         />
       ) : null}
 

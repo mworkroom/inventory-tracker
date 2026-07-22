@@ -1,28 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
 import { todayIso, usageCycleDurationDays } from "../lib/inventory";
-import type { InventoryProduct, UsageCycleDraft } from "../types";
+import type { InventoryProduct, UsageCycle, UsageCycleDraft } from "../types";
 import { CloseIcon } from "./Icons";
 
 interface UsageCycleDialogProps {
   product: InventoryProduct;
+  cycle: UsageCycle | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (draft: UsageCycleDraft) => Promise<void>;
+  onDelete: (() => Promise<void>) | null;
 }
 
 export function UsageCycleDialog({
   product,
+  cycle,
   busy,
   onClose,
-  onSubmit
+  onSubmit,
+  onDelete
 }: UsageCycleDialogProps) {
-  const [draft, setDraft] = useState<UsageCycleDraft>(() => makeDraft());
+  const [draft, setDraft] = useState<UsageCycleDraft>(() => makeDraft(cycle));
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const durationDays = useMemo(() => {
     if (!draft.openedOn || !draft.finishedOn) return null;
     const days = usageCycleDurationDays(draft.openedOn, draft.finishedOn);
     return days > 0 ? days : null;
   }, [draft.finishedOn, draft.openedOn]);
+
+  useEffect(() => {
+    setDraft(makeDraft(cycle));
+    setFormError(null);
+    setDeleteArmed(false);
+  }, [cycle]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -68,6 +79,23 @@ export function UsageCycleDialog({
     }
   }
 
+  async function confirmDelete() {
+    if (!onDelete || busy) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+
+    setFormError(null);
+    try {
+      await onDelete();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : "사용 주기를 삭제하지 못했습니다.");
+    }
+  }
+
+  const isEdit = Boolean(cycle);
+
   return (
     <div
       className="dialog-backdrop"
@@ -85,8 +113,14 @@ export function UsageCycleDialog({
         <div className="editor-heading">
           <div>
             <span className="dialog-product-name">{product.name}</span>
-            <h2 id="usage-cycle-dialog-title">과거 사용 주기 추가</h2>
-            <p>이미 다 쓴 제품의 사용 기간을 재고 변화 없이 학습 자료로 저장합니다.</p>
+            <h2 id="usage-cycle-dialog-title">
+              {isEdit ? "사용 주기 수정" : "과거 사용 주기 추가"}
+            </h2>
+            <p>
+              {isEdit
+                ? "잘못 입력한 기간과 사용 인원을 바로잡습니다."
+                : "이미 다 쓴 제품의 사용 기간을 재고 변화 없이 학습 자료로 저장합니다."}
+            </p>
           </div>
           <button
             type="button"
@@ -143,12 +177,22 @@ export function UsageCycleDialog({
 
           {formError ? <p className="form-error">{formError}</p> : null}
 
-          <div className="dialog-actions">
+          <div className={`dialog-actions${isEdit ? " purchase-edit-actions" : ""}`}>
+            {isEdit ? (
+              <button
+                type="button"
+                className="danger-button"
+                disabled={busy}
+                onClick={() => void confirmDelete()}
+              >
+                {deleteArmed ? "한 번 더 눌러 삭제" : "삭제"}
+              </button>
+            ) : null}
             <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>
               취소
             </button>
             <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? "저장 중…" : "과거 사용 주기 저장"}
+              {busy ? "저장 중…" : isEdit ? "수정 저장" : "과거 사용 주기 저장"}
             </button>
           </div>
         </form>
@@ -157,10 +201,10 @@ export function UsageCycleDialog({
   );
 }
 
-function makeDraft(): UsageCycleDraft {
+function makeDraft(cycle: UsageCycle | null): UsageCycleDraft {
   return {
-    openedOn: "",
-    finishedOn: todayIso(),
-    consumerCount: "1"
+    openedOn: cycle?.opened_on || "",
+    finishedOn: cycle?.finished_on || todayIso(),
+    consumerCount: String(cycle?.consumer_count || 1)
   };
 }

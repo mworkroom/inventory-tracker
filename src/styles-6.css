@@ -10,6 +10,32 @@
   text-align: center;
 }
 
+.cycle-history li {
+  padding: 0;
+}
+
+.cycle-history li > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cycle-history li > button:hover {
+  background: #f8f9fb;
+}
+
+.cycle-history li > button:disabled {
+  cursor: wait;
+}
+
 @media (max-width: 720px) {
 }
 

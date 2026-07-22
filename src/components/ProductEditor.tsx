@@ -4,8 +4,10 @@ import type {
   InventoryProduct,
   InventoryStore,
   ProductDraft,
+  ProductCategory,
   TrackingMode
 } from "../types";
+import { PRODUCT_CATEGORIES } from "../types";
 import { CloseIcon } from "./Icons";
 
 interface ProductEditorProps {
@@ -216,6 +218,17 @@ export function ProductEditor({
                 placeholder="예: 코코넛 오일"
                 onChange={(event) => update("name", event.target.value)}
               />
+            </label>
+            <label>
+              <span className="field-label">카테고리</span>
+              <select
+                value={draft.category}
+                onChange={(event) => update("category", event.target.value as ProductCategory)}
+              >
+                {PRODUCT_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
             </label>
             <label>
               <span className="field-label">주구매처 · 선택</span>
@@ -481,6 +494,7 @@ function ModeButton({
 function makeDraft(product: InventoryProduct | null): ProductDraft {
   return {
     name: product?.name || "",
+    category: product?.category || "미분류",
     trackingMode: product?.tracking_mode || "count",
     unitLabel: product?.unit_label || "개",
     lowStockThreshold: String(product?.low_stock_threshold ?? 1),

@@ -30,11 +30,13 @@ interface ProductCardProps {
   busy: boolean;
   onToggle: () => void;
   onAction: (action: InventoryAction) => void;
+  onActiveUsageEdit: () => void;
   onEdit: () => void;
   onPurchaseAdd: () => void;
   onPurchaseBulk: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
   onUsageCycleAdd: () => void;
+  onUsageCycleEdit: (cycle: UsageCycle) => void;
 }
 
 export function ProductCard({
@@ -49,11 +51,13 @@ export function ProductCard({
   busy,
   onToggle,
   onAction,
+  onActiveUsageEdit,
   onEdit,
   onPurchaseAdd,
   onPurchaseBulk,
   onPurchaseEdit,
-  onUsageCycleAdd
+  onUsageCycleAdd,
+  onUsageCycleEdit
 }: ProductCardProps) {
   const productEvents = events
     .filter((event) => event.product_id === product.id)
@@ -139,12 +143,20 @@ export function ProductCard({
           </div>
 
           <dl className="product-info">
+            <InfoRow label="카테고리" value={product.category || "미분류"} />
+            <InfoRow label="주구매처" value={preferredStoreName || "미지정"} />
             <InfoRow
               label="현재 재고"
               value={stockInitialized
                 ? `${currentMeta}${hasActiveProduct ? " · 사용 중 제품 포함" : ""}`
                 : "미설정 · 첫 입고 또는 현재 재고 설정 필요"}
             />
+            {isCycle && product.package_size && product.capacity_unit ? (
+              <InfoRow
+                label="제품 1개 용량"
+                value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
+              />
+            ) : null}
             <InfoRow label="기록 방식" value={trackingModeLabel(product)} />
 
             {isCycle ? (
@@ -162,12 +174,6 @@ export function ProductCard({
                   <InfoRow
                     label="1인 사용량"
                     value={`하루 약 ${formatDecimal(estimate.perPersonDailyCapacity)}${product.capacity_unit}`}
-                  />
-                ) : null}
-                {product.package_size && product.capacity_unit ? (
-                  <InfoRow
-                    label="제품 1개 용량"
-                    value={`${formatQuantity(product.package_size)}${product.capacity_unit}`}
                   />
                 ) : null}
               </>
@@ -196,7 +202,6 @@ export function ProductCard({
               label="구매 기준"
               value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
             />
-            <InfoRow label="주구매처" value={preferredStoreName || "미지정"} />
             <InfoRow
               label="구매 기록"
               value={
@@ -265,6 +270,11 @@ export function ProductCard({
                 사용
               </button>
             )}
+            {isCycle && product.active_opened_on ? (
+              <button type="button" disabled={busy} onClick={onActiveUsageEdit}>
+                사용 중 수정
+              </button>
+            ) : null}
             {isCycle && product.active_opened_on ? (
               <button type="button" disabled={busy} onClick={() => onAction("remainder")}>
                 현재 잔량
@@ -371,8 +381,14 @@ export function ProductCard({
                   <ul>
                     {productCycles.map((cycle) => (
                       <li key={cycle.id}>
-                        <span>{formatDate(cycle.opened_on)} → {formatDate(cycle.finished_on)}</span>
-                        <strong>{cycle.duration_days}일 · {cycle.consumer_count}명</strong>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => onUsageCycleEdit(cycle)}
+                        >
+                          <span>{formatDate(cycle.opened_on)} → {formatDate(cycle.finished_on)}</span>
+                          <strong>{cycle.duration_days}일 · {cycle.consumer_count}명</strong>
+                        </button>
                       </li>
                     ))}
                   </ul>

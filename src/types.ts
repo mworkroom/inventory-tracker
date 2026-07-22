@@ -7,7 +7,9 @@ export type InventoryEventType =
   | "remainder"
   | "adjustment";
 export type InventoryFilter = "all" | "urgent" | "learning";
-export type InventoryViewMode = "list" | "store";
+export const PRODUCT_CATEGORIES = ["식료품", "생활용품", "영양제", "의복", "미분류"] as const;
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+export type InventoryViewMode = "store" | "category";
 
 export interface InventoryStore {
   id: string;
@@ -23,6 +25,7 @@ export interface InventoryProduct {
   id: string;
   workspace_id: string;
   name: string;
+  category?: ProductCategory;
   tracking_mode: TrackingMode;
   unit_label: string;
   package_size: number | null;
@@ -94,6 +97,7 @@ export interface InventoryPurchase {
 
 export interface ProductDraft {
   name: string;
+  category: ProductCategory;
   trackingMode: TrackingMode;
   unitLabel: string;
   lowStockThreshold: string;
@@ -118,6 +122,11 @@ export interface InventoryActionDraft {
 export interface UsageCycleDraft {
   openedOn: string;
   finishedOn: string;
+  consumerCount: string;
+}
+
+export interface ActiveUsageDraft {
+  openedOn: string;
   consumerCount: string;
 }
 

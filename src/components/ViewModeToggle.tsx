@@ -10,19 +10,19 @@ export function ViewModeToggle({ value, onChange }: ViewModeToggleProps) {
     <div className="view-mode-toggle" role="group" aria-label="목록 보기 방식">
       <button
         type="button"
-        className={value === "list" ? "active" : ""}
-        aria-pressed={value === "list"}
-        onClick={() => onChange("list")}
-      >
-        기본 목록
-      </button>
-      <button
-        type="button"
         className={value === "store" ? "active" : ""}
         aria-pressed={value === "store"}
         onClick={() => onChange("store")}
       >
-        구매처별
+        구매처
+      </button>
+      <button
+        type="button"
+        className={value === "category" ? "active" : ""}
+        aria-pressed={value === "category"}
+        onClick={() => onChange("category")}
+      >
+        카테고리
       </button>
     </div>
   );

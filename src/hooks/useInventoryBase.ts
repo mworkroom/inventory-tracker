@@ -7,6 +7,7 @@ import {
   usageCycleDurationDays
 } from "../lib/inventory";
 import type {
+  ActiveUsageDraft,
   InventoryAction,
   InventoryActionDraft,
   InventoryEvent,
@@ -19,6 +20,7 @@ import type {
   UsageCycle,
   UsageCycleDraft
 } from "../types";
+import { PRODUCT_CATEGORIES } from "../types";
 
 interface InventoryState {
   products: InventoryProduct[];
@@ -45,6 +47,15 @@ interface InventoryState {
     product: InventoryProduct,
     draft: UsageCycleDraft
   ) => Promise<UsageCycle>;
+  updateActiveUsage: (
+    product: InventoryProduct,
+    draft: ActiveUsageDraft
+  ) => Promise<InventoryProduct>;
+  updateUsageCycle: (
+    cycle: UsageCycle,
+    draft: UsageCycleDraft
+  ) => Promise<UsageCycle>;
+  deleteUsageCycle: (cycle: UsageCycle) => Promise<void>;
   createPurchase: (
     product: InventoryProduct,
     draft: PurchaseDraft
@@ -189,8 +200,17 @@ export function useInventory(userId: string): InventoryState {
           }
         );
         if (rpcError) throw rpcError;
+        const createdProduct = data as InventoryProduct;
+        const { data: categorizedProduct, error: categoryError } = await supabase
+          .from("inventory_products")
+          .update({ category: normalizeCategory(draft.category) })
+          .eq("id", createdProduct.id)
+          .eq("workspace_id", WORKSPACE_ID)
+          .select("*")
+          .single();
+        if (categoryError) throw categoryError;
         await refresh(true);
-        return data as InventoryProduct;
+        return categorizedProduct as InventoryProduct;
       } catch (caught) {
         const message = readableError(caught);
         setError(message);
@@ -226,9 +246,10 @@ export function useInventory(userId: string): InventoryState {
               trackingMode: product.tracking_mode
             }),
             alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-            current_consumer_count: isCycle
+          current_consumer_count: isCycle
               ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
               : 1,
+            category: normalizeCategory(draft.category),
             preferred_store_id: draft.preferredStoreId || null,
             notes: draft.notes.trim() || null,
             updated_by: userId
@@ -390,6 +411,112 @@ export function useInventory(userId: string): InventoryState {
     [cycles, refresh, userId]
   );
 
+  const updateActiveUsage = useCallback(
+    async (product: InventoryProduct, draft: ActiveUsageDraft) => {
+      if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+      if (product.tracking_mode !== "cycle" || !product.active_opened_on) {
+        throw new Error("현재 사용 중인 개봉·소진 제품만 수정할 수 있습니다.");
+      }
+
+      setBusy(true);
+      setError(null);
+      try {
+        if (!draft.openedOn || draft.openedOn > todayIso()) {
+          throw new Error("개봉일은 오늘 또는 과거 날짜로 입력해주세요.");
+        }
+        const consumerCount = parseRequiredInteger(draft.consumerCount, "사용 인원");
+        if (consumerCount < 1) throw new Error("사용 인원은 1명 이상이어야 합니다.");
+
+        const { data, error: rpcError } = await supabase.rpc(
+          "update_active_usage",
+          {
+            p_product_id: product.id,
+            p_opened_on: draft.openedOn,
+            p_consumer_count: consumerCount
+          }
+        );
+        if (rpcError) throw rpcError;
+        await refresh(true);
+        return data as InventoryProduct;
+      } catch (caught) {
+        const message = readableError(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh]
+  );
+
+  const updateUsageCycle = useCallback(
+    async (cycle: UsageCycle, draft: UsageCycleDraft) => {
+      if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+      setBusy(true);
+      setError(null);
+      try {
+        const { consumerCount } = validateUsageCycleDraft(draft);
+        if (
+          cycles.some(
+            (candidate) =>
+              candidate.id !== cycle.id &&
+              candidate.product_id === cycle.product_id &&
+              candidate.opened_on === draft.openedOn &&
+              candidate.finished_on === draft.finishedOn
+          )
+        ) {
+          throw new Error("같은 개봉일과 소진일의 사용 주기가 이미 있습니다.");
+        }
+
+        const { data, error: updateError } = await supabase
+          .from("inventory_usage_cycles")
+          .update({
+            opened_on: draft.openedOn,
+            finished_on: draft.finishedOn,
+            consumer_count: consumerCount
+          })
+          .eq("id", cycle.id)
+          .eq("workspace_id", WORKSPACE_ID)
+          .select("*")
+          .single();
+        if (updateError) throw updateError;
+        await refresh(true);
+        return data as UsageCycle;
+      } catch (caught) {
+        const message = readableError(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [cycles, refresh]
+  );
+
+  const deleteUsageCycle = useCallback(
+    async (cycle: UsageCycle) => {
+      if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+      setBusy(true);
+      setError(null);
+      try {
+        const { error: deleteError } = await supabase
+          .from("inventory_usage_cycles")
+          .delete()
+          .eq("id", cycle.id)
+          .eq("workspace_id", WORKSPACE_ID);
+        if (deleteError) throw deleteError;
+        await refresh(true);
+      } catch (caught) {
+        const message = readableError(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh]
+  );
+
   const createPurchaseBatch = useCallback(
     async (product: InventoryProduct, draft: PurchaseBulkDraft) => {
       if (!supabase) throw new Error("Supabase 연결이 없습니다.");
@@ -535,6 +662,9 @@ export function useInventory(userId: string): InventoryState {
     updateProduct,
     recordAction,
     createUsageCycle,
+    updateActiveUsage,
+    updateUsageCycle,
+    deleteUsageCycle,
     createPurchase,
     createPurchaseBatch,
     updatePurchase,
@@ -658,6 +788,12 @@ function parseLowStockThreshold(draft: ProductDraft): number {
   return threshold;
 }
 
+function normalizeCategory(category: string): (typeof PRODUCT_CATEGORIES)[number] {
+  return PRODUCT_CATEGORIES.includes(category as (typeof PRODUCT_CATEGORIES)[number])
+    ? (category as (typeof PRODUCT_CATEGORIES)[number])
+    : "미분류";
+}
+
 function validateCycleProductDraft(draft: ProductDraft): void {
   if (draft.trackingMode !== "cycle") return;
   if (
@@ -668,6 +804,23 @@ function validateCycleProductDraft(draft: ProductDraft): void {
   }
   const consumerCount = parseRequiredInteger(draft.currentConsumerCount, "사용 인원");
   if (consumerCount < 1) throw new Error("사용 인원은 1명 이상이어야 합니다.");
+}
+
+function validateUsageCycleDraft(draft: UsageCycleDraft): {
+  durationDays: number;
+  consumerCount: number;
+} {
+  if (!draft.openedOn || !draft.finishedOn) {
+    throw new Error("개봉일과 다 쓴 날을 모두 입력해주세요.");
+  }
+  const durationDays = usageCycleDurationDays(draft.openedOn, draft.finishedOn);
+  if (durationDays < 1) throw new Error("다 쓴 날은 개봉일보다 빠를 수 없습니다.");
+  if (draft.finishedOn > todayIso()) {
+    throw new Error("미래 날짜는 과거 사용 기록으로 저장할 수 없습니다.");
+  }
+  const consumerCount = parseRequiredInteger(draft.consumerCount, "사용 인원");
+  if (consumerCount < 1) throw new Error("사용 인원은 1명 이상이어야 합니다.");
+  return { durationDays, consumerCount };
 }
 
 function readableError(error: unknown): string {
