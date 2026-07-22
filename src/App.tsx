@@ -72,7 +72,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const lifecycle = useProductLifecycle();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>("all");
-  const [viewMode, setViewMode] = useState<InventoryViewMode>("store");
+  const [viewMode, setViewMode] = useState<InventoryViewMode>("category");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editorProduct, setEditorProduct] = useState<InventoryProduct | null | undefined>(undefined);
   const [actionState, setActionState] = useState<{
