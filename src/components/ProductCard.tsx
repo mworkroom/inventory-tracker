@@ -34,6 +34,7 @@ interface ProductCardProps {
   onPurchaseAdd: () => void;
   onPurchaseBulk: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
+  onUsageCycleAdd: () => void;
 }
 
 export function ProductCard({
@@ -51,7 +52,8 @@ export function ProductCard({
   onEdit,
   onPurchaseAdd,
   onPurchaseBulk,
-  onPurchaseEdit
+  onPurchaseEdit,
+  onUsageCycleAdd
 }: ProductCardProps) {
   const productEvents = events
     .filter((event) => event.product_id === product.id)
@@ -348,20 +350,37 @@ export function ProductCard({
             )}
           </section>
 
-          {productCycles.length ? (
-            <details className="cycle-history">
-              <summary>
-                완료된 사용 주기 {cycles.filter((cycle) => cycle.product_id === product.id).length}회
-              </summary>
-              <ul>
-                {productCycles.map((cycle) => (
-                  <li key={cycle.id}>
-                    <span>{formatDate(cycle.opened_on)} → {formatDate(cycle.finished_on)}</span>
-                    <strong>{cycle.duration_days}일 · {cycle.consumer_count}명</strong>
-                  </li>
-                ))}
-              </ul>
-            </details>
+          {isCycle ? (
+            <section className="history-section usage-cycle-section">
+              <div className="section-heading">
+                <h3>사용 주기 기록</h3>
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={busy}
+                  onClick={onUsageCycleAdd}
+                >
+                  과거 기록 추가
+                </button>
+              </div>
+              {productCycles.length ? (
+                <details className="cycle-history">
+                  <summary>
+                    완료된 사용 주기 {cycles.filter((cycle) => cycle.product_id === product.id).length}회
+                  </summary>
+                  <ul>
+                    {productCycles.map((cycle) => (
+                      <li key={cycle.id}>
+                        <span>{formatDate(cycle.opened_on)} → {formatDate(cycle.finished_on)}</span>
+                        <strong>{cycle.duration_days}일 · {cycle.consumer_count}명</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : (
+                <p className="history-empty">아직 완료된 사용 주기가 없습니다.</p>
+              )}
+            </section>
           ) : null}
         </div>
       ) : null}

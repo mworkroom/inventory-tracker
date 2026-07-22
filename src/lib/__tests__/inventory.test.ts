@@ -10,7 +10,8 @@ import {
   calculatePurchaseStats,
   estimateProduct,
   median,
-  parsePurchaseDates
+  parsePurchaseDates,
+  usageCycleDurationDays
 } from "../inventory";
 
 const baseProduct: InventoryProduct = {
@@ -142,6 +143,10 @@ test("개수 직접 차감은 최근 사용 간격의 중앙값으로 남은 기
 test("재고 수량 기준과 예상 소진일 기준 모두 구매 필요를 표시한다", () => {
   assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 1 }, [], [], "2026-07-19").isUrgent, true);
   assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 0, alert_days: 160 }, [], [cycle()], "2026-07-19").isUrgent, true);
+});
+
+test("과거 사용 주기는 개봉일과 소진일을 모두 포함해 기간을 계산한다", () => {
+  assert.equal(usageCycleDurationDays("2026-04-12", "2026-06-26"), 76);
 });
 
 test("재고 미설정 제품은 0개로 오해해 구매 필요를 표시하지 않는다", () => {

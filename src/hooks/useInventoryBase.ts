@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { WORKSPACE_ID } from "../config";
 import { supabase } from "../lib/supabase";
-import { parsePurchaseDates, todayIso } from "../lib/inventory";
+import {
+  parsePurchaseDates,
+  todayIso,
+  usageCycleDurationDays
+} from "../lib/inventory";
 import type {
   InventoryAction,
   InventoryActionDraft,
@@ -12,7 +16,8 @@ import type {
   ProductDraft,
   PurchaseBulkDraft,
   PurchaseDraft,
-  UsageCycle
+  UsageCycle,
+  UsageCycleDraft
 } from "../types";
 
 interface InventoryState {
@@ -36,6 +41,10 @@ interface InventoryState {
     action: InventoryAction,
     draft: InventoryActionDraft
   ) => Promise<InventoryProduct>;
+  createUsageCycle: (
+    product: InventoryProduct,
+    draft: UsageCycleDraft
+  ) => Promise<UsageCycle>;
   createPurchase: (
     product: InventoryProduct,
     draft: PurchaseDraft
@@ -151,6 +160,7 @@ export function useInventory(userId: string): InventoryState {
       setBusy(true);
       setError(null);
       try {
+        validateCycleProductDraft(draft);
         const { data, error: rpcError } = await supabase.rpc(
           "create_inventory_product",
           {
@@ -159,10 +169,7 @@ export function useInventory(userId: string): InventoryState {
             p_tracking_mode: draft.trackingMode,
             p_unit_label: draft.unitLabel.trim(),
             p_initial_quantity: null,
-            p_low_stock_threshold: parseRequiredNumber(
-              draft.lowStockThreshold,
-              "구매 기준"
-            ),
+            p_low_stock_threshold: parseLowStockThreshold(draft),
             p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
             p_package_size:
               draft.trackingMode === "cycle"
@@ -202,6 +209,7 @@ export function useInventory(userId: string): InventoryState {
       setError(null);
       try {
         const isCycle = product.tracking_mode === "cycle";
+        validateCycleProductDraft({ ...draft, trackingMode: product.tracking_mode });
         const packageSize = isCycle
           ? parseOptionalPositiveNumber(draft.packageSize, "제품 용량")
           : null;
@@ -213,10 +221,10 @@ export function useInventory(userId: string): InventoryState {
             unit_label: draft.unitLabel.trim(),
             package_size: packageSize,
             capacity_unit: capacityUnit,
-            low_stock_threshold: parseRequiredNumber(
-              draft.lowStockThreshold,
-              "구매 기준"
-            ),
+            low_stock_threshold: parseLowStockThreshold({
+              ...draft,
+              trackingMode: product.tracking_mode
+            }),
             alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
             current_consumer_count: isCycle
               ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
@@ -260,11 +268,15 @@ export function useInventory(userId: string): InventoryState {
             p_action: action,
             p_amount:
               action === "intake" || action === "use"
-                ? parseRequiredNumber(draft.amount, "수량")
+                ? action === "intake" && product.tracking_mode === "cycle"
+                  ? parseRequiredInteger(draft.amount, "입고 개수")
+                  : parseRequiredNumber(draft.amount, "수량")
                 : null,
             p_target_quantity:
               action === "adjustment"
-                ? parseRequiredNumber(draft.targetQuantity, "실제 재고")
+                ? product.tracking_mode === "cycle"
+                  ? parseRequiredInteger(draft.targetQuantity, "실제 재고 개수")
+                  : parseRequiredNumber(draft.targetQuantity, "실제 재고")
                 : null,
             p_occurred_on: draft.occurredOn || todayIso(),
             p_consumer_count:
@@ -312,6 +324,70 @@ export function useInventory(userId: string): InventoryState {
       }
     },
     [refresh, userId]
+  );
+
+  const createUsageCycle = useCallback(
+    async (product: InventoryProduct, draft: UsageCycleDraft) => {
+      if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+      if (product.tracking_mode !== "cycle") {
+        throw new Error("개봉·소진 방식 제품만 과거 사용 주기를 기록할 수 있습니다.");
+      }
+
+      setBusy(true);
+      setError(null);
+      try {
+        if (!draft.openedOn || !draft.finishedOn) {
+          throw new Error("개봉일과 다 쓴 날을 모두 입력해주세요.");
+        }
+        const durationDays = usageCycleDurationDays(draft.openedOn, draft.finishedOn);
+        if (durationDays < 1) {
+          throw new Error("다 쓴 날은 개봉일보다 빠를 수 없습니다.");
+        }
+        if (draft.finishedOn > todayIso()) {
+          throw new Error("미래 날짜는 과거 사용 기록으로 저장할 수 없습니다.");
+        }
+        const consumerCount = parseRequiredInteger(draft.consumerCount, "사용 인원");
+        if (consumerCount < 1) {
+          throw new Error("사용 인원은 1명 이상이어야 합니다.");
+        }
+        if (
+          cycles.some(
+            (cycle) =>
+              cycle.product_id === product.id &&
+              cycle.opened_on === draft.openedOn &&
+              cycle.finished_on === draft.finishedOn
+          )
+        ) {
+          throw new Error("같은 개봉일과 소진일의 사용 주기가 이미 있습니다.");
+        }
+
+        const { data, error: insertError } = await supabase
+          .from("inventory_usage_cycles")
+          .insert({
+            workspace_id: WORKSPACE_ID,
+            product_id: product.id,
+            opened_on: draft.openedOn,
+            finished_on: draft.finishedOn,
+            duration_days: durationDays,
+            package_size: product.package_size,
+            capacity_unit: product.capacity_unit,
+            consumer_count: consumerCount,
+            created_by: userId
+          })
+          .select("*")
+          .single();
+        if (insertError) throw insertError;
+        await refresh(true);
+        return data as UsageCycle;
+      } catch (caught) {
+        const message = readableError(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [cycles, refresh, userId]
   );
 
   const createPurchaseBatch = useCallback(
@@ -458,6 +534,7 @@ export function useInventory(userId: string): InventoryState {
     createProduct,
     updateProduct,
     recordAction,
+    createUsageCycle,
     createPurchase,
     createPurchaseBatch,
     updatePurchase,
@@ -571,6 +648,26 @@ function parseRequiredInteger(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) throw new Error(`${label}을 정수로 입력해주세요.`);
   return parsed;
+}
+
+function parseLowStockThreshold(draft: ProductDraft): number {
+  const threshold = draft.trackingMode === "cycle"
+    ? parseRequiredInteger(draft.lowStockThreshold, "구매 기준")
+    : parseRequiredNumber(draft.lowStockThreshold, "구매 기준");
+  if (threshold < 0) throw new Error("구매 기준은 0 이상이어야 합니다.");
+  return threshold;
+}
+
+function validateCycleProductDraft(draft: ProductDraft): void {
+  if (draft.trackingMode !== "cycle") return;
+  if (
+    draft.unitLabel.trim().toLowerCase() ===
+    draft.capacityUnit.trim().toLowerCase()
+  ) {
+    throw new Error("재고 단위에는 통·병·봉처럼 포장 개수를 나타내는 말을 입력해주세요.");
+  }
+  const consumerCount = parseRequiredInteger(draft.currentConsumerCount, "사용 인원");
+  if (consumerCount < 1) throw new Error("사용 인원은 1명 이상이어야 합니다.");
 }
 
 function readableError(error: unknown): string {

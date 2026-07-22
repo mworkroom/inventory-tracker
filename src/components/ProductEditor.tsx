@@ -91,6 +91,12 @@ export function ProductEditor({
       return;
     }
 
+    const lowStockThreshold = Number(draft.lowStockThreshold);
+    if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
+      setFormError("구매 기준은 0 이상의 숫자로 입력해주세요.");
+      return;
+    }
+
     if (draft.trackingMode === "cycle") {
       if (!draft.packageSize.trim() || Number(draft.packageSize) <= 0) {
         setFormError("제품 1개의 전체 용량을 입력해주세요.");
@@ -98,6 +104,19 @@ export function ProductEditor({
       }
       if (!draft.capacityUnit.trim()) {
         setFormError("제품 용량 단위를 입력해주세요.");
+        return;
+      }
+      if (draft.unitLabel.trim().toLowerCase() === draft.capacityUnit.trim().toLowerCase()) {
+        setFormError("재고 단위에는 통·병·봉처럼 포장 개수를 나타내는 말을 입력해주세요.");
+        return;
+      }
+      if (!Number.isInteger(lowStockThreshold)) {
+        setFormError("개봉·소진 제품의 구매 기준은 포장 개수 정수로 입력해주세요.");
+        return;
+      }
+      const consumerCount = Number(draft.currentConsumerCount);
+      if (!Number.isInteger(consumerCount) || consumerCount < 1) {
+        setFormError("현재 사용하는 사람 수는 1명 이상의 정수로 입력해주세요.");
         return;
       }
     }
@@ -252,6 +271,9 @@ export function ProductEditor({
                   placeholder={isCycle ? "통, 병, 봉" : "개, 팩, 인분"}
                   onChange={(event) => update("unitLabel", event.target.value)}
                 />
+                {isCycle ? (
+                  <span className="field-hint">ml·g가 아니라 재고로 세는 통·병·봉 단위를 입력합니다.</span>
+                ) : null}
               </label>
               {isEdit ? <ReadOnlyQuantity product={product} /> : null}
             </div>

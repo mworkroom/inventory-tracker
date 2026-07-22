@@ -11,6 +11,7 @@ import {
   type PurchaseDialogMode
 } from "./components/PurchaseDialog";
 import { SearchBar } from "./components/SearchBar";
+import { UsageCycleDialog } from "./components/UsageCycleDialog";
 import { ViewModeToggle } from "./components/ViewModeToggle";
 import { useInventory } from "./hooks/useInventory";
 import { useProductLifecycle } from "./hooks/useProductLifecycle";
@@ -32,7 +33,8 @@ import type {
   PurchaseBulkDraft,
   PurchaseDraft,
   PurchaseStats,
-  UsageCycle
+  UsageCycle,
+  UsageCycleDraft
 } from "./types";
 
 export default function App() {
@@ -69,6 +71,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     action: InventoryAction;
   } | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseState>(null);
+  const [usageCycleProduct, setUsageCycleProduct] = useState<InventoryProduct | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const busy = inventory.busy || lifecycle.busy;
@@ -219,6 +222,14 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     showToast(`과거 구매 기록 ${count}건을 저장했습니다.`);
   }
 
+  async function saveUsageCycle(draft: UsageCycleDraft) {
+    if (!usageCycleProduct) return;
+    await inventory.createUsageCycle(usageCycleProduct, draft);
+    setExpandedId(usageCycleProduct.id);
+    setUsageCycleProduct(null);
+    showToast("과거 사용 주기를 저장했습니다.");
+  }
+
   async function deletePurchase() {
     if (!purchaseState?.purchase) return;
     const productId = purchaseState.product.id;
@@ -314,6 +325,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         onPurchaseEdit={(purchase) =>
           setPurchaseState({ product, mode: "edit", purchase })
         }
+        onUsageCycleAdd={() => setUsageCycleProduct(product)}
       />
     );
   }
@@ -459,6 +471,15 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           onSubmitSingle={savePurchase}
           onSubmitBulk={savePurchaseBatch}
           onDelete={purchaseState.mode === "edit" ? deletePurchase : null}
+        />
+      ) : null}
+
+      {usageCycleProduct ? (
+        <UsageCycleDialog
+          product={usageCycleProduct}
+          busy={busy}
+          onClose={() => setUsageCycleProduct(null)}
+          onSubmit={saveUsageCycle}
         />
       ) : null}
 

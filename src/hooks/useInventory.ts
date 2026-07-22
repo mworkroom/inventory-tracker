@@ -34,11 +34,15 @@ export function useInventory(userId: string) {
           p_product_id: product.id,
           p_action: action,
           p_amount: amountActions.includes(action)
-            ? parseRequiredNumber(draft.amount, action === "remainder" ? "현재 잔량" : "수량")
+            ? action === "intake" && product.tracking_mode === "cycle"
+              ? parseRequiredInteger(draft.amount, "입고 개수")
+              : parseRequiredNumber(draft.amount, action === "remainder" ? "현재 잔량" : "수량")
             : null,
           p_target_quantity:
             action === "adjustment"
-              ? parseRequiredNumber(draft.targetQuantity, "실제 재고")
+              ? product.tracking_mode === "cycle"
+                ? parseRequiredInteger(draft.targetQuantity, "실제 재고 개수")
+                : parseRequiredNumber(draft.targetQuantity, "실제 재고")
               : null,
           p_occurred_on: draft.occurredOn || todayIso(),
           p_consumer_count:

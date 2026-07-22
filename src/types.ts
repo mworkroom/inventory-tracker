@@ -115,6 +115,12 @@ export interface InventoryActionDraft {
   note: string;
 }
 
+export interface UsageCycleDraft {
+  openedOn: string;
+  finishedOn: string;
+  consumerCount: string;
+}
+
 export interface PurchaseDraft {
   purchasedOn: string;
   storeId: string;

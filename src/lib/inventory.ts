@@ -350,6 +350,10 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((isoToUtcMs(toIso) - isoToUtcMs(fromIso)) / DAY_MS);
 }
 
+export function usageCycleDurationDays(openedOn: string, finishedOn: string): number {
+  return daysBetween(openedOn, finishedOn) + 1;
+}
+
 export function addDays(iso: string, days: number): string {
   const date = new Date(isoToUtcMs(iso) + days * DAY_MS);
   return date.toISOString().slice(0, 10);
