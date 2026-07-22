@@ -1,4 +1,4 @@
-export type TrackingMode = "count" | "cycle" | "capacity";
+export type TrackingMode = "count" | "cycle";
 export type InventoryEventType =
   | "intake"
   | "use"
@@ -28,6 +28,7 @@ export interface InventoryProduct {
   package_size: number | null;
   capacity_unit: string | null;
   current_quantity: number;
+  stock_initialized: boolean;
   low_stock_threshold: number;
   alert_days: number;
   current_consumer_count: number;
@@ -95,7 +96,6 @@ export interface ProductDraft {
   name: string;
   trackingMode: TrackingMode;
   unitLabel: string;
-  initialQuantity: string;
   lowStockThreshold: string;
   alertDays: string;
   packageSize: string;
@@ -103,7 +103,6 @@ export interface ProductDraft {
   currentConsumerCount: string;
   preferredStoreId: string;
   notes: string;
-  occurredOn: string;
 }
 
 export type InventoryAction = InventoryEventType;
@@ -140,6 +139,7 @@ export interface ProductEstimate {
   isUrgent: boolean;
   urgentReason: string | null;
   isLearning: boolean;
+  forecastSource: "usage" | "purchase" | null;
   remainingDays: number | null;
   estimatedOutDate: string | null;
   expectedCycleDays: number | null;

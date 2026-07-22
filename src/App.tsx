@@ -78,14 +78,6 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     [inventory.stores]
   );
 
-  const estimates = useMemo(() => {
-    const result = new Map<string, ProductEstimate>();
-    inventory.products.forEach((product) => {
-      result.set(product.id, estimateProduct(product, inventory.events, inventory.cycles));
-    });
-    return result;
-  }, [inventory.cycles, inventory.events, inventory.products]);
-
   const purchaseStats = useMemo(() => {
     const result = new Map<string, PurchaseStats>();
     inventory.products.forEach((product) => {
@@ -93,6 +85,23 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     });
     return result;
   }, [inventory.products, inventory.purchases]);
+
+  const estimates = useMemo(() => {
+    const result = new Map<string, ProductEstimate>();
+    inventory.products.forEach((product) => {
+      result.set(
+        product.id,
+        estimateProduct(
+          product,
+          inventory.events,
+          inventory.cycles,
+          undefined,
+          purchaseStats.get(product.id) || null
+        )
+      );
+    });
+    return result;
+  }, [inventory.cycles, inventory.events, inventory.products, purchaseStats]);
 
   const purchasesByProduct = useMemo(() => {
     const result = new Map<string, InventoryPurchase[]>();
@@ -272,7 +281,16 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
       <ProductCard
         key={product.id}
         product={product}
-        estimate={estimates.get(product.id) || estimateProduct(product, [], [])}
+        estimate={
+          estimates.get(product.id) ||
+          estimateProduct(
+            product,
+            [],
+            [],
+            undefined,
+            purchaseStats.get(product.id) || null
+          )
+        }
         purchaseStats={
           purchaseStats.get(product.id) || calculatePurchaseStats(product.id, [])
         }
@@ -470,14 +488,15 @@ function canDeleteUnusedProduct(
   if (product.active_opened_on) return false;
 
   const productEvents = events.filter((event) => event.product_id === product.id);
-  const hasOnlyInitialEvent =
-    productEvents.length === 1 &&
-    productEvents[0].event_type === "adjustment" &&
-    productEvents[0].quantity_before === 0 &&
-    productEvents[0].note === "최초 재고 등록";
+  const hasNoRealInventoryHistory =
+    productEvents.length === 0 ||
+    (productEvents.length === 1 &&
+      productEvents[0].event_type === "adjustment" &&
+      productEvents[0].quantity_before === 0 &&
+      ["최초 재고 등록", "재고 기준 설정"].includes(productEvents[0].note || ""));
 
   return (
-    hasOnlyInitialEvent &&
+    hasNoRealInventoryHistory &&
     !cycles.some((cycle) => cycle.product_id === product.id) &&
     !purchases.some((purchase) => purchase.product_id === product.id)
   );

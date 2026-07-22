@@ -22,6 +22,7 @@ const baseProduct: InventoryProduct = {
   package_size: 1600,
   capacity_unit: "ml",
   current_quantity: 1,
+  stock_initialized: true,
   low_stock_threshold: 0,
   alert_days: 30,
   current_consumer_count: 1,
@@ -138,24 +139,43 @@ test("개수 직접 차감은 최근 사용 간격의 중앙값으로 남은 기
   assert.equal(estimate.remainingDays, 32);
 });
 
-test("용량 직접 차감도 사용 기록을 기준으로 남은 기간을 계산한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    tracking_mode: "capacity",
-    unit_label: "g",
-    package_size: null,
-    capacity_unit: null,
-    current_quantity: 400
-  };
-  const events = [useEvent("2026-07-01", 100), useEvent("2026-07-09", 100), useEvent("2026-07-17", 100)];
-  const estimate = estimateProduct(product, events, [], "2026-07-19");
-  assert.equal(estimate.daysPerUnit, 0.08);
-  assert.equal(estimate.remainingDays, 32);
-});
-
 test("재고 수량 기준과 예상 소진일 기준 모두 구매 필요를 표시한다", () => {
   assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 1 }, [], [], "2026-07-19").isUrgent, true);
   assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 0, alert_days: 160 }, [], [cycle()], "2026-07-19").isUrgent, true);
+});
+
+test("재고 미설정 제품은 0개로 오해해 구매 필요를 표시하지 않는다", () => {
+  const estimate = estimateProduct(
+    { ...baseProduct, current_quantity: 0, stock_initialized: false, low_stock_threshold: 1 },
+    [],
+    [],
+    "2026-07-19"
+  );
+  assert.equal(estimate.isUrgent, false);
+  assert.equal(estimate.remainingDays, null);
+  assert.equal(estimate.forecastSource, null);
+});
+
+test("사용 기록이 없으면 과거 구매 간격을 임시 예상으로 사용한다", () => {
+  const purchases = [
+    purchase("2024-01-10"),
+    purchase("2024-05-18"),
+    purchase("2024-10-02"),
+    purchase("2025-02-11"),
+    purchase("2025-07-06")
+  ];
+  const stats = calculatePurchaseStats("product-1", purchases, "2025-07-20");
+  const estimate = estimateProduct(
+    { ...baseProduct, current_quantity: 0, stock_initialized: false, alert_days: 130 },
+    [],
+    [],
+    "2025-07-20",
+    stats
+  );
+  assert.equal(estimate.forecastSource, "purchase");
+  assert.equal(estimate.estimatedOutDate, "2025-11-18");
+  assert.equal(estimate.remainingDays, 121);
+  assert.equal(estimate.isUrgent, true);
 });
 
 test("중앙값은 튀는 사용 기록 하나의 영향을 줄인다", () => {

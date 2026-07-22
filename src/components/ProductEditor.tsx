@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatQuantity, todayIso } from "../lib/inventory";
+import { formatQuantity, isStockInitialized } from "../lib/inventory";
 import type {
   InventoryProduct,
   InventoryStore,
@@ -66,17 +66,6 @@ export function ProductEditor({
         };
       }
 
-      if (mode === "capacity") {
-        return {
-          ...current,
-          trackingMode: mode,
-          unitLabel: "g",
-          packageSize: "",
-          capacityUnit: "",
-          currentConsumerCount: "1"
-        };
-      }
-
       return {
         ...current,
         trackingMode: mode,
@@ -98,11 +87,7 @@ export function ProductEditor({
     }
 
     if (!draft.unitLabel.trim()) {
-      setFormError(
-        draft.trackingMode === "capacity"
-          ? "용량 단위를 입력해주세요."
-          : "재고 단위를 입력해주세요."
-      );
+      setFormError("재고 단위를 입력해주세요.");
       return;
     }
 
@@ -113,10 +98,6 @@ export function ProductEditor({
       }
       if (!draft.capacityUnit.trim()) {
         setFormError("제품 용량 단위를 입력해주세요.");
-        return;
-      }
-      if (!Number.isInteger(Number(draft.initialQuantity))) {
-        setFormError("개봉·소진 제품의 현재 재고는 통·병·봉 개수로 입력해주세요.");
         return;
       }
     }
@@ -169,7 +150,6 @@ export function ProductEditor({
 
   const isEdit = Boolean(product);
   const isCycle = draft.trackingMode === "cycle";
-  const isCapacity = draft.trackingMode === "capacity";
   const archiveDisabled = Boolean(product?.active_opened_on);
 
   return (
@@ -192,7 +172,7 @@ export function ProductEditor({
             <p>
               {isEdit
                 ? "이름과 구매 기준을 수정합니다."
-                : "재고를 세는 방식과 사용 기록 방식을 먼저 선택합니다."}
+                : "제품 항목을 먼저 만들고 현재 재고는 나중에 연결할 수 있습니다."}
             </p>
           </div>
           <button
@@ -235,7 +215,7 @@ export function ProductEditor({
 
           <section className="form-section">
             <h3>재고·사용 기록 방식</h3>
-            <div className="mode-picker three-modes">
+            <div className="mode-picker">
               <ModeButton
                 mode="count"
                 selected={draft.trackingMode === "count"}
@@ -254,15 +234,6 @@ export function ProductEditor({
                 description="오일 2통처럼 개수로 재고를 세고 한 통씩 사용"
                 onSelect={() => selectTrackingMode("cycle")}
               />
-              <ModeButton
-                mode="capacity"
-                selected={draft.trackingMode === "capacity"}
-                disabled={isEdit}
-                symbol="g"
-                title="용량 직접 차감"
-                description="남은 800g처럼 실제 g·ml 사용량을 직접 뺌"
-                onSelect={() => selectTrackingMode("capacity")}
-              />
             </div>
             {isEdit ? (
               <p className="field-hint">
@@ -271,69 +242,25 @@ export function ProductEditor({
             ) : null}
           </section>
 
-          {isCapacity ? (
-            <section className="form-section">
-              <h3>용량 재고</h3>
-              <div className="form-grid two-columns">
-                <label>
-                  <span className="field-label">용량 단위</span>
-                  <input
-                    value={draft.unitLabel}
-                    placeholder="g, ml"
-                    onChange={(event) => update("unitLabel", event.target.value)}
-                  />
-                </label>
-                {!isEdit ? (
-                  <label>
-                    <span className="field-label">현재 실제 재고</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={draft.initialQuantity}
-                      onChange={(event) => update("initialQuantity", event.target.value)}
-                    />
-                  </label>
-                ) : (
-                  <ReadOnlyQuantity product={product} />
-                )}
-              </div>
+          <section className="form-section">
+            <h3>{isCycle ? "포장 단위 재고" : "개수 재고"}</h3>
+            <div className="form-grid two-columns">
+              <label>
+                <span className="field-label">재고 단위</span>
+                <input
+                  value={draft.unitLabel}
+                  placeholder={isCycle ? "통, 병, 봉" : "개, 팩, 인분"}
+                  onChange={(event) => update("unitLabel", event.target.value)}
+                />
+              </label>
+              {isEdit ? <ReadOnlyQuantity product={product} /> : null}
+            </div>
+            {!isEdit ? (
               <p className="field-hint">
-                사용할 때마다 실제 사용한 g·ml를 입력합니다. 포장 한 개의 사용 기간은 측정하지 않습니다.
+                저장 후 첫 입고를 기록하거나 카드에서 현재 재고를 설정하면 계산을 시작합니다.
               </p>
-            </section>
-          ) : (
-            <section className="form-section">
-              <h3>{isCycle ? "포장 단위 재고" : "개수 재고"}</h3>
-              <div className="form-grid two-columns">
-                <label>
-                  <span className="field-label">재고 단위</span>
-                  <input
-                    value={draft.unitLabel}
-                    placeholder={isCycle ? "통, 병, 봉" : "개, 팩, 인분"}
-                    onChange={(event) => update("unitLabel", event.target.value)}
-                  />
-                </label>
-                {!isEdit ? (
-                  <label>
-                    <span className="field-label">현재 실제 재고</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step={isCycle ? "1" : "any"}
-                      value={draft.initialQuantity}
-                      onChange={(event) => update("initialQuantity", event.target.value)}
-                    />
-                    {isCycle ? (
-                      <span className="field-hint">사용 중인 제품도 현재 재고 개수에 포함합니다.</span>
-                    ) : null}
-                  </label>
-                ) : (
-                  <ReadOnlyQuantity product={product} />
-                )}
-              </div>
-            </section>
-          )}
+            ) : null}
+          </section>
 
           {isCycle ? (
             <section className="form-section">
@@ -380,7 +307,7 @@ export function ProductEditor({
             <div className="form-grid two-columns">
               <label>
                 <span className="field-label">
-                  몇 {draft.unitLabel || "단위"} 이하일 때 빨간불?
+                  현재 재고가 몇 {draft.unitLabel || "단위"} 이하일 때?
                 </span>
                 <input
                   type="number"
@@ -401,19 +328,12 @@ export function ProductEditor({
                 />
               </label>
             </div>
+            <p className="field-hint">
+              {isCycle
+                ? "g·ml 잔량이 아니라 통·병·봉 개수와 예상 잔여일로 구매 필요를 판단합니다."
+                : "현재 개수와 예상 잔여일 중 하나가 기준에 닿으면 구매 필요로 표시합니다."}
+            </p>
           </section>
-
-          {!isEdit ? (
-            <label className="form-section compact-section">
-              <span className="field-label">최초 재고 확인일</span>
-              <input
-                type="date"
-                max={todayIso()}
-                value={draft.occurredOn}
-                onChange={(event) => update("occurredOn", event.target.value)}
-              />
-            </label>
-          ) : null}
 
           <label className="form-section compact-section">
             <span className="field-label">메모 · 선택</span>
@@ -466,7 +386,7 @@ export function ProductEditor({
                   <strong>잘못 만든 제품 삭제</strong>
                   <span>
                     {canDelete
-                      ? "최초 등록 외의 실사용·구매 기록이 없어 영구 삭제할 수 있습니다."
+                      ? "실사용·구매 기록이 없어 영구 삭제할 수 있습니다."
                       : "실사용 또는 구매 기록이 있어 삭제할 수 없습니다. 제품 보관을 사용해주세요."}
                   </span>
                 </div>
@@ -491,8 +411,12 @@ function ReadOnlyQuantity({ product }: { product: InventoryProduct | null }) {
   return (
     <div className="read-only-field">
       <span className="field-label">현재 실제 재고</span>
-      <strong>{formatQuantity(product?.current_quantity || 0)}{product?.unit_label}</strong>
-      <small>수량은 카드의 ‘재고 정정’에서 바꿉니다.</small>
+      <strong>
+        {product && isStockInitialized(product)
+          ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
+          : "재고 미설정"}
+      </strong>
+      <small>수량은 카드의 ‘현재 재고 설정’ 또는 ‘재고 정정’에서 바꿉니다.</small>
     </div>
   );
 }
@@ -537,7 +461,6 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
     name: product?.name || "",
     trackingMode: product?.tracking_mode || "count",
     unitLabel: product?.unit_label || "개",
-    initialQuantity: product ? String(product.current_quantity) : "0",
     lowStockThreshold: String(product?.low_stock_threshold ?? 1),
     alertDays: String(product?.alert_days ?? 30),
     packageSize:
@@ -547,7 +470,6 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
     capacityUnit: product?.capacity_unit || "",
     currentConsumerCount: String(product?.current_consumer_count ?? 1),
     preferredStoreId: product?.preferred_store_id || "",
-    notes: product?.notes || "",
-    occurredOn: todayIso()
+    notes: product?.notes || ""
   };
 }

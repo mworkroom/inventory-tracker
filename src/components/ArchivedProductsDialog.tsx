@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { formatQuantity } from "../lib/inventory";
+import { formatQuantity, isStockInitialized } from "../lib/inventory";
 import type { InventoryProduct, InventoryStore } from "../types";
 import { CloseIcon } from "./Icons";
 
@@ -73,7 +73,9 @@ export function ArchivedProductsDialog({
                 <div>
                   <strong>{product.name}</strong>
                   <span>
-                    현재 {formatQuantity(product.current_quantity)}{product.unit_label}
+                    {isStockInitialized(product)
+                      ? `현재 ${formatQuantity(product.current_quantity)}${product.unit_label}`
+                      : "재고 미설정"}
                     {product.preferred_store_id
                       ? ` · ${storeById.get(product.preferred_store_id) || "구매처 미지정"}`
                       : " · 구매처 미지정"}

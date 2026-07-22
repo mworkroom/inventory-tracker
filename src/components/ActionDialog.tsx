@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatDate, formatQuantity, todayIso } from "../lib/inventory";
+import {
+  formatDate,
+  formatQuantity,
+  isStockInitialized,
+  todayIso
+} from "../lib/inventory";
 import type {
   InventoryAction,
   InventoryActionDraft,
@@ -28,7 +33,7 @@ export function ActionDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const content = useMemo(() => getActionContent(action, product), [action, product]);
   const isCycle = product.tracking_mode === "cycle";
-  const isCapacity = product.tracking_mode === "capacity";
+  const stockInitialized = isStockInitialized(product);
 
   useEffect(() => {
     setDraft(makeDraft(product, action));
@@ -97,7 +102,11 @@ export function ActionDialog({
         </div>
 
         <div className="current-stock-banner">
-          현재 재고 <strong>{formatQuantity(product.current_quantity)}{product.unit_label}</strong>
+          현재 재고 <strong>
+            {stockInitialized
+              ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
+              : "미설정"}
+          </strong>
           {product.active_opened_on ? (
             <span> · {formatDate(product.active_opened_on)} 개봉{activeSummary}</span>
           ) : product.active_remaining_quantity !== null ? (
@@ -109,13 +118,7 @@ export function ActionDialog({
           {action === "intake" || action === "use" ? (
             <label>
               <span className="field-label">
-                {action === "intake"
-                  ? isCapacity
-                    ? "입고 용량"
-                    : "입고 수량"
-                  : isCapacity
-                    ? "사용한 용량"
-                    : "사용 수량"}
+                {action === "intake" ? "입고 수량" : "사용 수량"}
               </span>
               <div className="input-with-unit">
                 <input
@@ -137,9 +140,7 @@ export function ActionDialog({
               <span className="field-label">
                 {isCycle
                   ? `지금 실제로 보유한 ${product.unit_label} 개수`
-                  : isCapacity
-                    ? "지금 직접 확인한 실제 남은 용량"
-                    : "지금 직접 확인한 실제 재고"}
+                  : "지금 직접 확인한 실제 재고"}
               </span>
               <div className="input-with-unit">
                 <input
@@ -154,6 +155,8 @@ export function ActionDialog({
               </div>
               {isCycle ? (
                 <span className="field-hint">사용 중인 제품도 현재 재고 개수에 포함합니다.</span>
+              ) : !stockInitialized ? (
+                <span className="field-hint">이 수량을 기준으로 이후 입고와 사용을 계산합니다.</span>
               ) : null}
             </label>
           ) : null}
@@ -277,7 +280,7 @@ function makeDraft(
       action === "open" || action === "remainder"
         ? String(cycleAmount)
         : "1",
-    targetQuantity: String(product.current_quantity),
+    targetQuantity: isStockInitialized(product) ? String(product.current_quantity) : "",
     occurredOn: todayIso(),
     consumerCount: String(product.current_consumer_count || 1),
     note: ""
@@ -286,16 +289,16 @@ function makeDraft(
 
 function getActionContent(action: InventoryAction, product: InventoryProduct) {
   const isCycle = product.tracking_mode === "cycle";
-  const isCapacity = product.tracking_mode === "capacity";
+  const stockInitialized = isStockInitialized(product);
 
   switch (action) {
     case "intake":
       return {
         title: "입고 기록",
-        description: isCycle
-          ? `새로 도착한 ${product.unit_label} 개수를 현재 재고에 더합니다.`
-          : isCapacity
-            ? "새로 도착한 실제 용량을 현재 재고에 더합니다."
+        description: !stockInitialized
+          ? `이 입고를 첫 재고 기록으로 삼아 0${product.unit_label}에서 계산을 시작합니다.`
+          : isCycle
+            ? `새로 도착한 ${product.unit_label} 개수를 현재 재고에 더합니다.`
             : "새로 도착한 실제 수량을 현재 재고에 더합니다.",
         submitLabel: "입고 기록"
       };
@@ -326,13 +329,13 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
     case "adjustment":
     default:
       return {
-        title: "재고 정정",
-        description: isCycle
-          ? "앱 숫자와 실제 보유 통·병·봉 개수가 다를 때 맞춥니다."
-          : isCapacity
-            ? "앱 숫자와 실제 남은 용량이 다를 때 맞춥니다."
-            : "앱 숫자와 실제 재고가 다를 때 맞춥니다.",
-        submitLabel: "재고 맞추기"
+        title: stockInitialized ? "재고 정정" : "현재 재고 설정",
+        description: stockInitialized
+          ? isCycle
+            ? "앱 숫자와 실제 보유 통·병·봉 개수가 다를 때 맞춥니다."
+            : "앱 숫자와 실제 재고가 다를 때 맞춥니다."
+          : "지금 보유한 수량을 기준점으로 저장하고 이후 재고 계산을 시작합니다.",
+        submitLabel: stockInitialized ? "재고 맞추기" : "재고 계산 시작"
       };
   }
 }

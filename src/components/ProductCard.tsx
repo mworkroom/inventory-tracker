@@ -3,7 +3,8 @@ import {
   formatApproxDays,
   formatCurrency,
   formatDate,
-  formatQuantity
+  formatQuantity,
+  isStockInitialized
 } from "../lib/inventory";
 import type {
   InventoryAction,
@@ -64,12 +65,24 @@ export function ProductCard({
     ? storeById.get(product.preferred_store_id)?.name || "구매처 미확인"
     : null;
   const isCycle = product.tracking_mode === "cycle";
-  const isCapacity = product.tracking_mode === "capacity";
+  const stockInitialized = isStockInitialized(product);
   const hasActiveProduct = Boolean(
     product.active_opened_on || product.active_remaining_quantity !== null
   );
-  const currentMeta = `${formatQuantity(product.current_quantity)}${product.unit_label}`;
+  const currentMeta = stockInitialized
+    ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
+    : "재고 미설정";
   const activeMeta = formatActiveMeta(product);
+  const statusClass = estimate.isUrgent
+    ? "urgent"
+    : stockInitialized
+      ? "okay"
+      : "unknown";
+  const statusLabel = estimate.isUrgent
+    ? "구매 필요"
+    : stockInitialized
+      ? "재고 여유"
+      : "재고 미설정";
 
   return (
     <article className={`product-card${expanded ? " expanded" : ""}`}>
@@ -80,13 +93,13 @@ export function ProductCard({
         onClick={onToggle}
       >
         <span
-          className={`status-dot ${estimate.isUrgent ? "urgent" : "okay"}`}
-          aria-label={estimate.isUrgent ? "구매 필요" : "재고 여유"}
+          className={`status-dot ${statusClass}`}
+          aria-label={statusLabel}
         />
         <span className="product-summary-copy">
           <strong>{product.name}</strong>
           <span className="product-summary-meta">
-            현재 {currentMeta}
+            {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
             {hasActiveProduct ? " · 사용 중" : ""}
             {preferredStoreName ? ` · ${preferredStoreName}` : ""}
           </span>
@@ -96,11 +109,23 @@ export function ProductCard({
 
       {expanded ? (
         <div className="product-details">
-          <div className={`status-callout ${estimate.isUrgent ? "urgent" : "okay"}`}>
-            <strong>{estimate.isUrgent ? "구매할 때가 가까워요" : "현재는 재고가 충분해요"}</strong>
+          <div className={`status-callout ${statusClass}`}>
+            <strong>
+              {estimate.isUrgent
+                ? "구매할 때가 가까워요"
+                : stockInitialized
+                  ? "현재는 재고가 충분해요"
+                  : "현재 재고를 아직 설정하지 않았어요"}
+            </strong>
             <span>
               {estimate.isUrgent
                 ? estimate.urgentReason
+                : !stockInitialized
+                  ? purchaseStats.nextPurchaseDate
+                    ? `과거 구매 기록 기준 다음 구매 예상은 ${formatDate(purchaseStats.nextPurchaseDate)}입니다. 첫 입고를 기록하거나 현재 재고를 설정하면 재고 알림도 시작됩니다.`
+                    : "과거 구매 기록은 지금 입력할 수 있습니다. 첫 입고를 기록하거나 현재 재고를 설정하면 재고 계산을 시작합니다."
+                : estimate.forecastSource === "purchase" && estimate.estimatedOutDate
+                  ? `사용 기록이 부족해 과거 구매 기록 기준 ${formatDate(estimate.estimatedOutDate)}을 임시로 참고하고 있습니다.`
                 : estimate.isLearning
                   ? isCycle
                     ? "개봉·소진 기록을 쌓는 중입니다. 구매 기준 개수로 먼저 판단하고 있어요."
@@ -114,7 +139,9 @@ export function ProductCard({
           <dl className="product-info">
             <InfoRow
               label="현재 재고"
-              value={`${currentMeta}${hasActiveProduct ? " · 사용 중 제품 포함" : ""}`}
+              value={stockInitialized
+                ? `${currentMeta}${hasActiveProduct ? " · 사용 중 제품 포함" : ""}`
+                : "미설정 · 첫 입고 또는 현재 재고 설정 필요"}
             />
             <InfoRow label="기록 방식" value={trackingModeLabel(product)} />
 
@@ -154,11 +181,13 @@ export function ProductCard({
             )}
 
             <InfoRow
-              label="예상 소진"
+              label={estimate.forecastSource === "purchase" ? "임시 구매 예상" : "예상 소진"}
               value={
                 estimate.estimatedOutDate
-                  ? `${formatDate(estimate.estimatedOutDate)} · ${formatApproxDays(estimate.remainingDays)}`
-                  : "사용 주기 학습 중"
+                  ? `${formatDate(estimate.estimatedOutDate)} · ${formatApproxDays(estimate.remainingDays)}${estimate.forecastSource === "purchase" ? " · 구매 기록 기준" : ""}`
+                  : stockInitialized
+                    ? "사용 주기 학습 중"
+                    : "현재 재고 설정 후 계산"
               }
             />
             <InfoRow
@@ -215,7 +244,7 @@ export function ProductCard({
                 <button
                   type="button"
                   className="quick-action-main"
-                  disabled={busy || product.current_quantity <= 0}
+                  disabled={busy || !stockInitialized || product.current_quantity <= 0}
                   onClick={() => onAction("open")}
                 >
                   {product.active_remaining_quantity !== null
@@ -227,7 +256,7 @@ export function ProductCard({
               <button
                 type="button"
                 className="quick-action-main"
-                disabled={busy || product.current_quantity <= 0}
+                disabled={busy || !stockInitialized || product.current_quantity <= 0}
                 onClick={() => onAction("use")}
               >
                 <span aria-hidden="true">−</span>
@@ -240,13 +269,15 @@ export function ProductCard({
               </button>
             ) : null}
             <button type="button" disabled={busy} onClick={() => onAction("adjustment")}>
-              재고 정정
+              {stockInitialized ? "재고 정정" : "현재 재고 설정"}
             </button>
           </div>
 
           {isCycle ? (
             <p className="cycle-action-note">
-              입고는 통·병·봉 개수만 늘립니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다.
+              {stockInitialized
+                ? "입고는 통·병·봉 개수만 늘립니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다."
+                : "첫 입고부터 계산을 시작하거나, 이미 가진 통·병·봉 개수를 먼저 설정할 수 있습니다."}
             </p>
           ) : null}
 
@@ -351,8 +382,6 @@ function trackingModeLabel(product: InventoryProduct): string {
   switch (product.tracking_mode) {
     case "cycle":
       return `개수 재고 + 개봉·소진 (${product.unit_label})`;
-    case "capacity":
-      return `용량 직접 차감 (${product.unit_label})`;
     case "count":
     default:
       return `개수 직접 차감 (${product.unit_label})`;
@@ -360,6 +389,8 @@ function trackingModeLabel(product: InventoryProduct): string {
 }
 
 function formatActiveMeta(product: InventoryProduct): string {
+  if (!isStockInitialized(product)) return "현재 재고를 설정하면 개봉 기록을 시작할 수 있음";
+
   const remaining =
     product.active_remaining_quantity !== null && product.capacity_unit
       ? ` · 약 ${formatQuantity(product.active_remaining_quantity)}${product.capacity_unit} 남음`
@@ -384,8 +415,7 @@ function formatPurchaseAmount(
   purchase: InventoryPurchase,
   product: InventoryProduct
 ): string {
-  const countUnit = product.tracking_mode === "capacity" ? "개" : product.unit_label;
-  const count = `${formatQuantity(purchase.package_count)}${countUnit}`;
+  const count = `${formatQuantity(purchase.package_count)}${product.unit_label}`;
   if (purchase.package_size === null || !purchase.package_unit) return count;
   return `${count} · ${formatQuantity(purchase.package_size)}${purchase.package_unit}씩`;
 }

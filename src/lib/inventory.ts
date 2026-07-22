@@ -17,11 +17,16 @@ export function todayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
+export function isStockInitialized(product: InventoryProduct): boolean {
+  return product.stock_initialized !== false;
+}
+
 export function estimateProduct(
   product: InventoryProduct,
   events: InventoryEvent[],
   cycles: UsageCycle[],
-  today = todayIso()
+  today = todayIso(),
+  purchaseStats: PurchaseStats | null = null
 ): ProductEstimate {
   const productEvents = events.filter((event) => event.product_id === product.id);
   const productCycles = cycles.filter((cycle) => cycle.product_id === product.id);
@@ -31,20 +36,52 @@ export function estimateProduct(
       ? estimateCycleProduct(product, productCycles, today)
       : estimateDecrementProduct(product, productEvents, today);
 
-  const quantityUrgent = product.current_quantity <= product.low_stock_threshold;
+  const stockInitialized = isStockInitialized(product);
+  const stockBase: ProductEstimate = stockInitialized
+    ? base
+    : {
+        ...base,
+        remainingDays: null,
+        estimatedOutDate: null,
+        forecastSource: null
+      };
+  const purchaseFallbackDate = purchaseStats?.nextPurchaseDate ?? null;
+  const purchaseFallbackDays = purchaseStats?.daysUntilNextPurchase ?? null;
+  const usesPurchaseFallback =
+    stockBase.remainingDays === null &&
+    purchaseFallbackDate !== null &&
+    purchaseFallbackDays !== null;
+  const remainingDays = usesPurchaseFallback
+    ? purchaseFallbackDays
+    : stockBase.remainingDays;
+  const estimatedOutDate = usesPurchaseFallback
+    ? purchaseFallbackDate
+    : stockBase.estimatedOutDate;
+  const forecastSource: ProductEstimate["forecastSource"] = usesPurchaseFallback
+    ? "purchase"
+    : stockBase.forecastSource;
+
+  const quantityUrgent =
+    stockInitialized &&
+    product.current_quantity <= product.low_stock_threshold;
   const daysUrgent =
-    base.remainingDays !== null && base.remainingDays <= product.alert_days;
+    remainingDays !== null && remainingDays <= product.alert_days;
   const isUrgent = quantityUrgent || daysUrgent;
 
   let urgentReason: string | null = null;
   if (quantityUrgent) {
     urgentReason = `현재 재고가 구매 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
-  } else if (daysUrgent && base.remainingDays !== null) {
-    urgentReason = `현재 사용 속도라면 약 ${Math.max(0, Math.round(base.remainingDays))}일 후 재고가 소진됩니다.`;
+  } else if (daysUrgent && remainingDays !== null) {
+    urgentReason = forecastSource === "purchase"
+      ? `과거 구매 기록 기준 다음 구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
+      : `현재 사용 속도라면 약 ${Math.max(0, Math.round(remainingDays))}일 후 재고가 소진됩니다.`;
   }
 
   return {
-    ...base,
+    ...stockBase,
+    remainingDays,
+    estimatedOutDate,
+    forecastSource,
     isUrgent,
     urgentReason
   };
@@ -132,6 +169,7 @@ function estimateCycleProduct(
     isUrgent: false,
     urgentReason: null,
     isLearning: recentCycles.length === 0,
+    forecastSource: remainingDays === null ? null : "usage",
     remainingDays,
     estimatedOutDate,
     expectedCycleDays,
@@ -191,6 +229,7 @@ function estimateDecrementProduct(
     isUrgent: false,
     urgentReason: null,
     isLearning: samples.length < 2,
+    forecastSource: remainingDays === null ? null : "usage",
     remainingDays,
     estimatedOutDate,
     expectedCycleDays: null,

@@ -158,7 +158,7 @@ export function useInventory(userId: string): InventoryState {
             p_name: draft.name.trim(),
             p_tracking_mode: draft.trackingMode,
             p_unit_label: draft.unitLabel.trim(),
-            p_initial_quantity: parseRequiredNumber(draft.initialQuantity, "현재 재고"),
+            p_initial_quantity: null,
             p_low_stock_threshold: parseRequiredNumber(
               draft.lowStockThreshold,
               "구매 기준"
@@ -177,7 +177,7 @@ export function useInventory(userId: string): InventoryState {
                 ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
                 : 1,
             p_notes: draft.notes.trim() || null,
-            p_occurred_on: draft.occurredOn || todayIso(),
+            p_occurred_on: todayIso(),
             p_preferred_store_id: draft.preferredStoreId || null
           }
         );
@@ -201,16 +201,16 @@ export function useInventory(userId: string): InventoryState {
       setBusy(true);
       setError(null);
       try {
-        const isCapacity = product.tracking_mode === "cycle";
-        const packageSize = isCapacity
+        const isCycle = product.tracking_mode === "cycle";
+        const packageSize = isCycle
           ? parseOptionalPositiveNumber(draft.packageSize, "제품 용량")
           : null;
-        const capacityUnit = isCapacity ? draft.capacityUnit.trim() : null;
+        const capacityUnit = isCycle ? draft.capacityUnit.trim() : null;
         const { data, error: updateError } = await supabase
           .from("inventory_products")
           .update({
             name: draft.name.trim(),
-            unit_label: isCapacity ? capacityUnit : draft.unitLabel.trim(),
+            unit_label: draft.unitLabel.trim(),
             package_size: packageSize,
             capacity_unit: capacityUnit,
             low_stock_threshold: parseRequiredNumber(
@@ -218,7 +218,7 @@ export function useInventory(userId: string): InventoryState {
               "구매 기준"
             ),
             alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-            current_consumer_count: isCapacity
+            current_consumer_count: isCycle
               ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
               : 1,
             preferred_store_id: draft.preferredStoreId || null,
