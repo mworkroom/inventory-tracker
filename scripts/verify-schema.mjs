@@ -14,13 +14,21 @@ assert.deepEqual(
     "20260722031757_add_product_categories.sql",
     "20260722032845_add_cosmetics_category.sql",
     "20260724194457_rebuild_inventory_tracker_v2.sql",
-    "20260724194709_add_inventory_foreign_key_indexes.sql"
+    "20260724194709_add_inventory_foreign_key_indexes.sql",
+    "20260724203523_separate_product_creation_from_inventory_events.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
 
 const sql = await readFile(
   join(migrationsDirectory, "20260724194457_rebuild_inventory_tracker_v2.sql"),
+  "utf8"
+);
+const productCreationSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260724203523_separate_product_creation_from_inventory_events.sql"
+  ),
   "utf8"
 );
 
@@ -48,6 +56,21 @@ assert.doesNotMatch(
   sql,
   /grant [^;]*\binsert\b[^;]* on table public\.inventory_(?:events|usage_cycles)/i,
   "이벤트 또는 사용 주기를 브라우저가 직접 생성할 수 있습니다."
+);
+assert.doesNotMatch(
+  productCreationSql,
+  /\bp_(?:initial_quantity|occurred_on)\b/,
+  "제품 기준 정보 생성 RPC에 최초 재고나 기록 날짜가 남아 있습니다."
+);
+assert.doesNotMatch(
+  productCreationSql,
+  /insert into public\.inventory_events/i,
+  "제품 생성 시 재고 이벤트를 함께 만들면 안 됩니다."
+);
+assert.match(
+  productCreationSql,
+  /current_quantity,[\s\S]*?stock_initialized,[\s\S]*?\n\s*0,\s*\n\s*false,/,
+  "새 제품은 재고 미설정 상태로 생성되어야 합니다."
 );
 
 for (const functionName of [

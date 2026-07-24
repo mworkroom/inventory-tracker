@@ -175,7 +175,6 @@ export function useInventory(userId: string): InventoryState {
             p_name: draft.name.trim(),
             p_tracking_mode: draft.trackingMode,
             p_unit_label: draft.unitLabel.trim(),
-            p_initial_quantity: null,
             p_low_stock_threshold: parseLowStockThreshold(draft),
             p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
             p_package_size:
@@ -191,7 +190,6 @@ export function useInventory(userId: string): InventoryState {
                 ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
                 : 1,
             p_notes: draft.notes.trim() || null,
-            p_occurred_on: todayIso(),
             p_preferred_store_id: draft.preferredStoreId || null,
             p_category: normalizeCategory(draft.category)
           }
