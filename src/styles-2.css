@@ -24,6 +24,12 @@
   color: var(--danger);
 }
 
+.status-callout.repurchase {
+  border-color: #ebcf9e;
+  background: #fff8e9;
+  color: #82540f;
+}
+
 .status-callout.okay {
   border-color: #bde5d3;
   background: var(--success-soft);
@@ -65,6 +71,81 @@
   text-align: right;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.forecast-section {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.forecast-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #f7f8fa;
+}
+
+.purchase-forecast-section .forecast-section-heading {
+  background: #fffaf1;
+}
+
+.forecast-section-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.forecast-section-heading h3,
+.forecast-section-heading p {
+  margin: 0;
+}
+
+.forecast-section-heading h3 {
+  font-size: var(--font-size-base);
+}
+
+.forecast-section-heading p {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.forecast-status {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.forecast-status.urgent {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.forecast-status.repurchase {
+  background: #ffedca;
+  color: #80500a;
+}
+
+.forecast-status.neutral {
+  background: #e9edf1;
+  color: #56606b;
+}
+
+.forecast-info {
+  padding: 0 12px;
+}
+
+.forecast-info .info-row:last-child {
+  border-bottom: 0;
 }
 
 .quick-actions {

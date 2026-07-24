@@ -9,6 +9,8 @@ import type {
 import {
   calculatePurchaseStats,
   estimateProduct,
+  getInventoryAttentionKind,
+  isRepurchaseDue,
   median,
   parsePurchaseDates,
   usageCycleDurationDays
@@ -207,4 +209,54 @@ test("과거 구매일 붙여넣기는 점·하이픈·한글 날짜를 정규�
 test("잘못된 날짜와 미래 날짜는 과거 구매일 입력에서 거부한다", () => {
   assert.throws(() => parsePurchaseDates("2024-02-30", "2025-01-01"), /날짜 형식/);
   assert.throws(() => parsePurchaseDates("2026-01-01", "2025-01-01"), /날짜 형식/);
+});
+
+test("구매 예상일은 재고·소진 알림과 별도의 재구매 신호로 분류한다", () => {
+  const product = {
+    ...baseProduct,
+    current_quantity: 3,
+    low_stock_threshold: 0,
+    alert_days: 130
+  };
+  const stats = calculatePurchaseStats(
+    "product-1",
+    [
+      purchase("2024-01-10"),
+      purchase("2024-05-18"),
+      purchase("2024-10-02"),
+      purchase("2025-02-11"),
+      purchase("2025-07-06")
+    ],
+    "2025-07-20"
+  );
+  const estimate = estimateProduct(product, [], [], "2025-07-20", stats);
+
+  assert.equal(estimate.forecastSource, "purchase");
+  assert.equal(getInventoryAttentionKind(product, estimate), null);
+  assert.equal(isRepurchaseDue(product, stats), true);
+});
+
+test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분류한다", () => {
+  const quantityProduct = {
+    ...baseProduct,
+    current_quantity: 1,
+    low_stock_threshold: 1
+  };
+  const quantityEstimate = estimateProduct(quantityProduct, [], [], "2026-07-19");
+  assert.equal(getInventoryAttentionKind(quantityProduct, quantityEstimate), "quantity");
+
+  const usageProduct = {
+    ...baseProduct,
+    current_quantity: 1,
+    low_stock_threshold: 0,
+    alert_days: 160
+  };
+  const usageEstimate = estimateProduct(
+    usageProduct,
+    [],
+    [cycle()],
+    "2026-07-19"
+  );
+  assert.equal(usageEstimate.forecastSource, "usage");
+  assert.equal(getInventoryAttentionKind(usageProduct, usageEstimate), "usage");
 });

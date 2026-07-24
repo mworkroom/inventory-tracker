@@ -739,9 +739,9 @@ function parseRequiredInteger(value: string, label: string): number {
 
 function parseLowStockThreshold(draft: ProductDraft): number {
   const threshold = draft.trackingMode === "cycle"
-    ? parseRequiredInteger(draft.lowStockThreshold, "구매 기준")
-    : parseRequiredNumber(draft.lowStockThreshold, "구매 기준");
-  if (threshold < 0) throw new Error("구매 기준은 0 이상이어야 합니다.");
+    ? parseRequiredInteger(draft.lowStockThreshold, "재고 알림 수량")
+    : parseRequiredNumber(draft.lowStockThreshold, "재고 알림 수량");
+  if (threshold < 0) throw new Error("재고 알림 수량은 0 이상이어야 합니다.");
   return threshold;
 }
 

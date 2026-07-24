@@ -5,7 +5,7 @@ export type InventoryEventType =
   | "open"
   | "finish"
   | "adjustment";
-export type InventoryFilter = "all" | "urgent" | "learning";
+export type InventoryFilter = "all" | "stock" | "repurchase" | "learning";
 export const PRODUCT_CATEGORIES = ["식료품", "화장품", "생활용품", "영양제", "의복", "미분류"] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 export type InventoryViewMode = "store" | "category";

@@ -320,11 +320,12 @@ button:disabled {
 
 .filter-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: var(--line);
   box-shadow: var(--shadow);
 }
 
@@ -335,16 +336,11 @@ button:disabled {
   justify-content: center;
   gap: 6px;
   border: 0;
-  border-right: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
   font-size: var(--font-size-base);
   font-weight: 850;
-}
-
-.filter-tabs button:last-child {
-  border-right: 0;
 }
 
 .filter-tabs button:hover {
@@ -442,6 +438,10 @@ button:disabled {
   background: var(--danger-dot);
 }
 
+.status-dot.repurchase {
+  background: #d78a1d;
+}
+
 .status-dot.okay {
   background: var(--success-dot);
 }
@@ -455,6 +455,47 @@ button:disabled {
   min-width: 0;
   flex: 1;
   gap: 4px;
+}
+
+.product-summary-name-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-summary-name-row > strong {
+  min-width: 0;
+  flex: 1;
+}
+
+.summary-status {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.summary-status.urgent {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.summary-status.repurchase {
+  background: #fff4df;
+  color: #8a570c;
+}
+
+.summary-status.okay {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.summary-status.unknown {
+  background: #eef0f2;
+  color: #616b76;
 }
 
 .product-summary-copy strong {

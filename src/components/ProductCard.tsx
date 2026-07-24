@@ -4,6 +4,8 @@ import {
   formatCurrency,
   formatDate,
   formatQuantity,
+  getInventoryAttentionKind,
+  isRepurchaseDue,
   isStockInitialized
 } from "../lib/inventory";
 import type {
@@ -87,16 +89,46 @@ export function ProductCard({
     ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
     : "재고 미설정";
   const activeMeta = formatActiveMeta(product);
-  const statusClass = estimate.isUrgent
+  const inventoryAttentionKind = getInventoryAttentionKind(product, estimate);
+  const repurchaseDue = isRepurchaseDue(product, purchaseStats);
+  const statusClass = inventoryAttentionKind
     ? "urgent"
-    : stockInitialized
-      ? "okay"
-      : "unknown";
-  const statusLabel = estimate.isUrgent
-    ? "구매 필요"
-    : stockInitialized
-      ? "재고 여유"
-      : "재고 미설정";
+    : repurchaseDue
+      ? "repurchase"
+      : stockInitialized
+        ? "okay"
+        : "unknown";
+  const statusLabel = inventoryAttentionKind === "quantity"
+    ? "재고 확인"
+    : inventoryAttentionKind === "usage"
+      ? "소진 임박"
+      : repurchaseDue
+        ? "재구매 시기"
+        : stockInitialized
+          ? "재고 여유"
+          : "재고 미설정";
+  const statusTitle = inventoryAttentionKind === "quantity"
+    ? "현재 재고가 알림 기준에 도달했어요"
+    : inventoryAttentionKind === "usage"
+      ? "예상 소진 시기가 가까워요"
+      : repurchaseDue
+        ? "평소 재구매 시기가 가까워요"
+        : stockInitialized
+          ? "현재 재고는 여유 있어요"
+          : "현재 재고를 아직 설정하지 않았어요";
+  const statusDescription = inventoryAttentionKind === "quantity"
+    ? `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
+    : inventoryAttentionKind === "usage" && estimate.remainingDays !== null
+      ? `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
+      : repurchaseDue && purchaseStats.nextPurchaseDate
+        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)} · 재고량과 별도로 과거 구매 간격을 기준으로 한 알림입니다.`
+        : stockInitialized
+          ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
+            ? `현재 사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
+            : isCycle
+              ? "개봉·소진 기록을 쌓으면 실제 사용 기간을 계산합니다."
+              : "서로 다른 날짜의 사용 기록을 쌓으면 실제 사용 속도를 계산합니다."
+          : "첫 입고를 기록하거나 현재 재고를 설정하면 재고 계산을 시작합니다.";
 
   return (
     <article className={`product-card${expanded ? " expanded" : ""}`}>
@@ -111,7 +143,10 @@ export function ProductCard({
           aria-label={statusLabel}
         />
         <span className="product-summary-copy">
-          <strong>{product.name}</strong>
+          <span className="product-summary-name-row">
+            <strong>{product.name}</strong>
+            <span className={`summary-status ${statusClass}`}>{statusLabel}</span>
+          </span>
           <span className="product-summary-meta">
             {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
             {hasActiveProduct ? " · 사용 중" : ""}
@@ -124,30 +159,8 @@ export function ProductCard({
       {expanded ? (
         <div className="product-details">
           <div className={`status-callout ${statusClass}`}>
-            <strong>
-              {estimate.isUrgent
-                ? "구매할 때가 가까워요"
-                : stockInitialized
-                  ? "현재는 재고가 충분해요"
-                  : "현재 재고를 아직 설정하지 않았어요"}
-            </strong>
-            <span>
-              {estimate.isUrgent
-                ? estimate.urgentReason
-                : !stockInitialized
-                  ? purchaseStats.nextPurchaseDate
-                    ? `과거 구매 기록 기준 다음 구매 예상은 ${formatDate(purchaseStats.nextPurchaseDate)}입니다. 첫 입고를 기록하거나 현재 재고를 설정하면 재고 알림도 시작됩니다.`
-                    : "과거 구매 기록은 지금 입력할 수 있습니다. 첫 입고를 기록하거나 현재 재고를 설정하면 재고 계산을 시작합니다."
-                : estimate.forecastSource === "purchase" && estimate.estimatedOutDate
-                  ? `사용 기록이 부족해 과거 구매 기록 기준 ${formatDate(estimate.estimatedOutDate)}을 임시로 참고하고 있습니다.`
-                : estimate.isLearning
-                  ? isCycle
-                    ? "개봉·소진 기록을 쌓는 중입니다. 구매 기준 개수로 먼저 판단하고 있어요."
-                    : "사용 기록을 쌓는 중입니다. 구매 기준 수량으로 먼저 판단하고 있어요."
-                  : estimate.remainingDays !== null
-                    ? `현재 사용 속도 기준 ${formatApproxDays(estimate.remainingDays)}분이 남았습니다.`
-                    : "설정한 구매 기준보다 재고가 많습니다."}
-            </span>
+            <strong>{statusTitle}</strong>
+            <span>{statusDescription}</span>
           </div>
 
           <dl className="product-info">
@@ -166,79 +179,119 @@ export function ProductCard({
               />
             ) : null}
             <InfoRow label="기록 방식" value={trackingModeLabel(product)} />
-
-            {isCycle ? (
-              <>
-                <InfoRow label="현재 제품" value={activeMeta} />
-                <InfoRow
-                  label="학습한 주기"
-                  value={
-                    estimate.expectedCycleDays === null
-                      ? "첫 소진 기록을 기다리는 중"
-                      : `${formatApproxDays(estimate.expectedCycleDays)} · 최근 ${estimate.cycleSampleCount}회 기준`
-                  }
-                />
-                {estimate.perPersonDailyCapacity !== null && product.capacity_unit ? (
-                  <InfoRow
-                    label="1인 사용량"
-                    value={`하루 약 ${formatDecimal(estimate.perPersonDailyCapacity)}${product.capacity_unit}`}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <InfoRow
-                label="최근 사용 속도"
-                value={
-                  estimate.daysPerUnit === null
-                    ? "서로 다른 날짜의 사용 기록 2개가 필요함"
-                    : `${formatApproxDays(estimate.daysPerUnit)}에 1${product.unit_label} · 최근 ${estimate.useSampleCount}일 기록 기준`
-                }
-              />
-            )}
-
-            <InfoRow
-              label={estimate.forecastSource === "purchase" ? "임시 구매 예상" : "예상 소진"}
-              value={
-                estimate.estimatedOutDate
-                  ? `${formatDate(estimate.estimatedOutDate)} · ${formatApproxDays(estimate.remainingDays)}${estimate.forecastSource === "purchase" ? " · 구매 기록 기준" : ""}`
-                  : stockInitialized
-                    ? "사용 주기 학습 중"
-                    : "현재 재고 설정 후 계산"
-              }
-            />
-            <InfoRow
-              label="구매 기준"
-              value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
-            />
-            <InfoRow
-              label="구매 기록"
-              value={
-                purchaseStats.purchaseCount > 0
-                  ? `${purchaseStats.purchaseCount}회 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
-                  : "아직 없음"
-              }
-            />
-            <InfoRow
-              label="평소 구매 간격"
-              value={
-                purchaseStats.medianIntervalDays === null
-                  ? purchaseStats.purchaseDateCount > 0
-                    ? "날짜가 2개 이상 필요함"
-                    : "과거 기록을 입력하면 계산"
-                  : `${formatApproxDays(purchaseStats.medianIntervalDays)} · 간격 ${purchaseStats.intervalSampleCount}개 기준`
-              }
-            />
-            {purchaseStats.nextPurchaseDate ? (
-              <InfoRow
-                label="다음 구매 예상"
-                value={formatPurchaseForecast(
-                  purchaseStats.nextPurchaseDate,
-                  purchaseStats.daysUntilNextPurchase
-                )}
-              />
-            ) : null}
             {product.notes ? <InfoRow label="메모" value={product.notes} /> : null}
           </dl>
+
+          <section className="forecast-section stock-forecast-section">
+            <div className="forecast-section-heading">
+              <div>
+                <h3>재고·사용 기준</h3>
+                <p>현재 재고와 실제 사용 기록으로 소진 시기를 봅니다.</p>
+              </div>
+              <span className={`forecast-status ${inventoryAttentionKind ? "urgent" : "neutral"}`}>
+                {inventoryAttentionKind === "quantity"
+                  ? "재고 확인"
+                  : inventoryAttentionKind === "usage"
+                    ? "소진 임박"
+                    : estimate.forecastSource === "usage"
+                      ? "소진일 계산됨"
+                      : "사용 기록 학습 중"}
+              </span>
+            </div>
+            <dl className="product-info forecast-info">
+              {isCycle ? (
+                <>
+                  <InfoRow label="현재 제품" value={activeMeta} />
+                  <InfoRow
+                    label="학습한 사용 주기"
+                    value={
+                      estimate.expectedCycleDays === null
+                        ? "첫 소진 기록을 기다리는 중"
+                        : `${formatApproxDays(estimate.expectedCycleDays)} · 최근 ${estimate.cycleSampleCount}회 기준`
+                    }
+                  />
+                  {estimate.perPersonDailyCapacity !== null && product.capacity_unit ? (
+                    <InfoRow
+                      label="1인 사용량"
+                      value={`하루 약 ${formatDecimal(estimate.perPersonDailyCapacity)}${product.capacity_unit}`}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <InfoRow
+                  label="최근 사용 속도"
+                  value={
+                    estimate.daysPerUnit === null
+                      ? "서로 다른 날짜의 사용 기록 2개가 필요함"
+                      : `${formatApproxDays(estimate.daysPerUnit)}에 1${product.unit_label} · 최근 ${estimate.useSampleCount}일 기록 기준`
+                  }
+                />
+              )}
+              <InfoRow
+                label="예상 소진 시기"
+                value={
+                  estimate.forecastSource === "usage" && estimate.estimatedOutDate
+                    ? `${formatDate(estimate.estimatedOutDate)} · ${formatApproxDays(estimate.remainingDays)}`
+                    : stockInitialized
+                      ? isCycle
+                        ? "완료된 사용 주기를 기록하면 계산"
+                        : "서로 다른 날짜의 사용 기록 2개부터 계산"
+                      : "현재 재고 설정 후 계산"
+                }
+              />
+              <InfoRow
+                label="재고 알림 기준"
+                value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
+              />
+            </dl>
+          </section>
+
+          <section className="forecast-section purchase-forecast-section">
+            <div className="forecast-section-heading">
+              <div>
+                <h3>구매 기록 기준</h3>
+                <p>재고량과 별도로 J님이 평소 다시 산 시기를 봅니다.</p>
+              </div>
+              <span className={`forecast-status ${repurchaseDue ? "repurchase" : "neutral"}`}>
+                {repurchaseDue
+                  ? "재구매 시기"
+                  : purchaseStats.nextPurchaseDate
+                    ? "예상일 있음"
+                    : "구매 주기 학습 전"}
+              </span>
+            </div>
+            <dl className="product-info forecast-info">
+              <InfoRow
+                label="구매 기록"
+                value={
+                  purchaseStats.purchaseCount > 0
+                    ? `${purchaseStats.purchaseCount}회 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
+                    : "아직 없음"
+                }
+              />
+              <InfoRow
+                label="평소 구매 간격"
+                value={
+                  purchaseStats.medianIntervalDays === null
+                    ? purchaseStats.purchaseDateCount > 0
+                      ? "날짜가 2개 이상 필요함"
+                      : "과거 기록을 입력하면 계산"
+                    : `${formatApproxDays(purchaseStats.medianIntervalDays)} · 간격 ${purchaseStats.intervalSampleCount}개 기준`
+                }
+              />
+              <InfoRow
+                label="평소 재구매 시기"
+                value={
+                  purchaseStats.nextPurchaseDate
+                    ? formatPurchaseForecast(
+                        purchaseStats.nextPurchaseDate,
+                        purchaseStats.daysUntilNextPurchase
+                      )
+                    : "구매일 2개 이상부터 계산"
+                }
+              />
+            </dl>
+          </section>
 
           <div className={`quick-actions${isCycle ? " cycle-actions" : ""}`} aria-label={`${product.name} 빠른 기록`}>
             <button type="button" disabled={busy} onClick={() => onAction("intake")}>

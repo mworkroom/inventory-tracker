@@ -20,7 +20,9 @@ import { useProductLifecycle } from "./hooks/useProductLifecycle";
 import {
   actionPastTense,
   calculatePurchaseStats,
-  estimateProduct
+  estimateProduct,
+  getInventoryAttentionKind,
+  isRepurchaseDue
 } from "./lib/inventory";
 import type {
   ActiveUsageDraft,
@@ -137,10 +139,19 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const counts = useMemo(
     () => ({
       all: inventory.products.length,
-      urgent: inventory.products.filter((product) => estimates.get(product.id)?.isUrgent).length,
+      stock: inventory.products.filter((product) => {
+        const estimate = estimates.get(product.id);
+        return estimate
+          ? getInventoryAttentionKind(product, estimate) !== null
+          : false;
+      }).length,
+      repurchase: inventory.products.filter((product) => {
+        const stats = purchaseStats.get(product.id);
+        return stats ? isRepurchaseDue(product, stats) : false;
+      }).length,
       learning: inventory.products.filter((product) => estimates.get(product.id)?.isLearning).length
     }),
-    [estimates, inventory.products]
+    [estimates, inventory.products, purchaseStats]
   );
 
   const visibleProducts = useMemo(() => {
@@ -148,7 +159,19 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     return [...inventory.products]
       .filter((product) => {
         const estimate = estimates.get(product.id);
-        if (filter === "urgent" && !estimate?.isUrgent) return false;
+        const stats = purchaseStats.get(product.id);
+        if (
+          filter === "stock" &&
+          (!estimate || getInventoryAttentionKind(product, estimate) === null)
+        ) {
+          return false;
+        }
+        if (
+          filter === "repurchase" &&
+          (!stats || !isRepurchaseDue(product, stats))
+        ) {
+          return false;
+        }
         if (filter === "learning" && !estimate?.isLearning) return false;
         if (!normalizedQuery) return true;
         const storeName = product.preferred_store_id
@@ -159,12 +182,25 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           .includes(normalizedQuery);
       })
       .sort((a, b) => {
-        const aUrgent = estimates.get(a.id)?.isUrgent ? 1 : 0;
-        const bUrgent = estimates.get(b.id)?.isUrgent ? 1 : 0;
-        if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+        const aEstimate = estimates.get(a.id);
+        const bEstimate = estimates.get(b.id);
+        const aStockAttention =
+          aEstimate && getInventoryAttentionKind(a, aEstimate) ? 1 : 0;
+        const bStockAttention =
+          bEstimate && getInventoryAttentionKind(b, bEstimate) ? 1 : 0;
+        if (aStockAttention !== bStockAttention) {
+          return bStockAttention - aStockAttention;
+        }
+        const aStats = purchaseStats.get(a.id);
+        const bStats = purchaseStats.get(b.id);
+        const aRepurchaseDue = aStats && isRepurchaseDue(a, aStats) ? 1 : 0;
+        const bRepurchaseDue = bStats && isRepurchaseDue(b, bStats) ? 1 : 0;
+        if (aRepurchaseDue !== bRepurchaseDue) {
+          return bRepurchaseDue - aRepurchaseDue;
+        }
         return a.name.localeCompare(b.name, "ko-KR");
       });
-  }, [estimates, filter, inventory.products, query, storeById]);
+  }, [estimates, filter, inventory.products, purchaseStats, query, storeById]);
 
   const storeGroups = useMemo<StoreGroup[]>(() => {
     const groups = new Map<string, StoreGroup>();
@@ -465,12 +501,15 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
             aria-label={viewMode === "store" ? "주구매처별 재고 목록" : "카테고리별 재고 목록"}
           >
             {activeGroups.map((group) => {
-              const urgentCount = group.products.filter(
-                (product) => estimates.get(product.id)?.isUrgent
-              ).length;
-              const soonCount = group.products.filter((product) => {
-                const days = purchaseStats.get(product.id)?.daysUntilNextPurchase;
-                return days !== null && days !== undefined && days <= 30;
+              const stockAttentionCount = group.products.filter((product) => {
+                const estimate = estimates.get(product.id);
+                return estimate
+                  ? getInventoryAttentionKind(product, estimate) !== null
+                  : false;
+              }).length;
+              const repurchaseDueCount = group.products.filter((product) => {
+                const stats = purchaseStats.get(product.id);
+                return stats ? isRepurchaseDue(product, stats) : false;
               }).length;
 
               return (
@@ -481,8 +520,12 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
                       <span>{group.products.length}개</span>
                     </div>
                     <small>
-                      {urgentCount > 0 ? `구매 필요 ${urgentCount}` : "구매 필요 없음"}
-                      {soonCount > 0 ? ` · 30일 안 예상 ${soonCount}` : ""}
+                      {stockAttentionCount > 0
+                        ? `재고·소진 확인 ${stockAttentionCount}`
+                        : "재고·소진 확인 없음"}
+                      {repurchaseDueCount > 0
+                        ? ` · 재구매 시기 ${repurchaseDueCount}`
+                        : ""}
                     </small>
                   </header>
                   <div className="product-list">

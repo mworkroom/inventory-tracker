@@ -70,7 +70,7 @@ export function estimateProduct(
 
   let urgentReason: string | null = null;
   if (quantityUrgent) {
-    urgentReason = `현재 재고가 구매 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
+    urgentReason = `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
   } else if (daysUrgent && remainingDays !== null) {
     urgentReason = forecastSource === "purchase"
       ? `과거 구매 기록 기준 다음 구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
@@ -85,6 +85,38 @@ export function estimateProduct(
     isUrgent,
     urgentReason
   };
+}
+
+export function getInventoryAttentionKind(
+  product: InventoryProduct,
+  estimate: ProductEstimate
+): "quantity" | "usage" | null {
+  if (
+    isStockInitialized(product) &&
+    product.current_quantity <= product.low_stock_threshold
+  ) {
+    return "quantity";
+  }
+
+  if (
+    estimate.forecastSource === "usage" &&
+    estimate.remainingDays !== null &&
+    estimate.remainingDays <= product.alert_days
+  ) {
+    return "usage";
+  }
+
+  return null;
+}
+
+export function isRepurchaseDue(
+  product: InventoryProduct,
+  purchaseStats: PurchaseStats
+): boolean {
+  return (
+    purchaseStats.daysUntilNextPurchase !== null &&
+    purchaseStats.daysUntilNextPurchase <= product.alert_days
+  );
 }
 
 function estimateCycleProduct(

@@ -95,7 +95,7 @@ export function ProductEditor({
 
     const lowStockThreshold = Number(draft.lowStockThreshold);
     if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
-      setFormError("구매 기준은 0 이상의 숫자로 입력해주세요.");
+      setFormError("재고 알림 수량은 0 이상의 숫자로 입력해주세요.");
       return;
     }
 
@@ -113,7 +113,7 @@ export function ProductEditor({
         return;
       }
       if (!Number.isInteger(lowStockThreshold)) {
-        setFormError("개봉·소진 제품의 구매 기준은 포장 개수 정수로 입력해주세요.");
+        setFormError("개봉·소진 제품의 재고 알림 수량은 포장 개수 정수로 입력해주세요.");
         return;
       }
       const consumerCount = Number(draft.currentConsumerCount);
@@ -192,7 +192,7 @@ export function ProductEditor({
             <h2 id="product-editor-title">{isEdit ? "제품 설정" : "제품 추가"}</h2>
             <p>
               {isEdit
-                ? "이름과 구매 기준을 수정합니다."
+                ? "제품 정보와 재고 알림 기준을 수정합니다."
                 : "제품 항목을 먼저 만들고 현재 재고는 나중에 연결할 수 있습니다."}
             </p>
           </div>
@@ -331,14 +331,14 @@ export function ProductEditor({
                   onChange={(event) => update("currentConsumerCount", event.target.value)}
                 />
                 <span className="field-hint">
-                  제품을 개봉할 때 날짜와 현재 잔량을 입력하면 한 통의 실제 사용 기간을 학습합니다.
+                  제품을 개봉할 때 개봉일과 사용 인원을 기록하면 한 통의 실제 사용 기간을 학습합니다.
                 </span>
               </label>
             </section>
           ) : null}
 
           <section className="form-section">
-            <h3>구매 기준</h3>
+            <h3>재고 알림 기준</h3>
             <div className="form-grid two-columns">
               <label>
                 <span className="field-label">
@@ -353,7 +353,7 @@ export function ProductEditor({
                 />
               </label>
               <label>
-                <span className="field-label">예상 소진 며칠 전부터?</span>
+                <span className="field-label">예상 소진 며칠 전부터 알릴까요?</span>
                 <input
                   type="number"
                   min="1"
@@ -365,8 +365,8 @@ export function ProductEditor({
             </div>
             <p className="field-hint">
               {isCycle
-                ? "g·ml 잔량이 아니라 통·병·봉 개수와 예상 잔여일로 구매 필요를 판단합니다."
-                : "현재 개수와 예상 잔여일 중 하나가 기준에 닿으면 구매 필요로 표시합니다."}
+                ? "g·ml 잔량이 아니라 통·병·봉 개수와 예상 잔여일로 재고 확인 시점을 판단합니다."
+                : "현재 개수와 예상 잔여일 중 하나가 기준에 닿으면 재고 확인으로 표시합니다."}
             </p>
           </section>
 
