@@ -15,7 +15,8 @@ assert.deepEqual(
     "20260722032845_add_cosmetics_category.sql",
     "20260724194457_rebuild_inventory_tracker_v2.sql",
     "20260724194709_add_inventory_foreign_key_indexes.sql",
-    "20260724203523_separate_product_creation_from_inventory_events.sql"
+    "20260724203523_separate_product_creation_from_inventory_events.sql",
+    "20260724205237_use_seoul_inventory_business_date.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -28,6 +29,13 @@ const productCreationSql = await readFile(
   join(
     migrationsDirectory,
     "20260724203523_separate_product_creation_from_inventory_events.sql"
+  ),
+  "utf8"
+);
+const businessDateSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260724205237_use_seoul_inventory_business_date.sql"
   ),
   "utf8"
 );
@@ -71,6 +79,31 @@ assert.match(
   productCreationSql,
   /current_quantity,[\s\S]*?stock_initialized,[\s\S]*?\n\s*0,\s*\n\s*false,/,
   "새 제품은 재고 미설정 상태로 생성되어야 합니다."
+);
+assert.doesNotMatch(
+  businessDateSql,
+  /\bcurrent_date\b/i,
+  "운영 기록 날짜를 UTC 데이터베이스 날짜와 직접 비교하고 있습니다."
+);
+assert.match(
+  businessDateSql,
+  /p_occurred_on date default \(\(now\(\) at time zone 'Asia\/Seoul'\)::date\)/,
+  "재고 기록 기본 날짜가 한국 날짜 기준이 아닙니다."
+);
+assert.match(
+  businessDateSql,
+  /alter column occurred_on[\s\S]*?time zone 'Asia\/Seoul'/,
+  "재고 이벤트 기본 날짜가 한국 날짜 기준이 아닙니다."
+);
+assert.match(
+  businessDateSql,
+  /new\.finished_on > \(now\(\) at time zone 'Asia\/Seoul'\)::date/,
+  "과거 사용 주기 완료일 검사가 한국 날짜 기준이 아닙니다."
+);
+assert.match(
+  businessDateSql,
+  /p_opened_on > \(now\(\) at time zone 'Asia\/Seoul'\)::date/,
+  "현재 개봉일 검사가 한국 날짜 기준이 아닙니다."
 );
 
 for (const functionName of [
