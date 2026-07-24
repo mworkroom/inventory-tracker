@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { WORKSPACE_ID } from "../config";
+import { readableError } from "../lib/errors";
 import { supabase } from "../lib/supabase";
 import type { InventoryProduct } from "../types";
 
@@ -33,7 +34,7 @@ export function useProductLifecycle(): ProductLifecycleState {
       .order("name", { ascending: true });
 
     if (selectError) {
-      const message = readableError(selectError);
+      const message = readableError(selectError, "제품을 처리하지 못했습니다.");
       setError(message);
       setLoading(false);
       return;
@@ -64,7 +65,7 @@ export function useProductLifecycle(): ProductLifecycleState {
         if (rpcError) throw rpcError;
         await refreshArchived();
       } catch (caught) {
-        const message = readableError(caught);
+        const message = readableError(caught, "제품을 처리하지 못했습니다.");
         setError(message);
         throw new Error(message);
       } finally {
@@ -88,7 +89,7 @@ export function useProductLifecycle(): ProductLifecycleState {
         if (rpcError) throw rpcError;
         await refreshArchived();
       } catch (caught) {
-        const message = readableError(caught);
+        const message = readableError(caught, "제품을 처리하지 못했습니다.");
         setError(message);
         throw new Error(message);
       } finally {
@@ -108,14 +109,4 @@ export function useProductLifecycle(): ProductLifecycleState {
     restoreProduct: (product) => setArchived(product, false),
     deleteUnusedProduct
   };
-}
-
-function readableError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null) {
-    const candidate = error as { message?: unknown; details?: unknown };
-    if (typeof candidate.message === "string") return candidate.message;
-    if (typeof candidate.details === "string") return candidate.details;
-  }
-  return "제품을 처리하지 못했습니다.";
 }

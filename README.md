@@ -9,7 +9,7 @@
 - 제품 등록과 주구매처 지정
 - 입고, 사용, 개봉, 소진, 재고 정정
 - 목록을 누르면 카드가 펼쳐지는 모바일 중심 UI
-- 빨간 점으로 구매 필요 품목 표시
+- 재고·소진 확인과 재구매 시기를 별도 상태로 표시
 - 개수 방식: 사용 기록 간격으로 남은 기간 계산
 - 개봉·소진 방식: 최근 5회 중앙값으로 한 제품의 사용 기간 계산
 - 개봉일과 소진일로 사용 주기 자동 기록
@@ -51,6 +51,17 @@
 현재 수량 변경은 `record_inventory_action()` RPC 안에서 이벤트 기록과 함께 원자적으로 처리됩니다. 개봉 시에는 개봉일과 사용 인원만 저장하고, 소진 시 완료된 사용 주기를 자동 생성합니다. 구매 기록은 별도 테이블에 저장되므로 재고 수량을 변경하지 않습니다. 공개 브라우저에는 Supabase publishable key만 포함하며, 실제 데이터 접근은 RLS가 제한합니다.
 
 `supabase/migrations/`의 기존 적용 이력은 그대로 보존하고, 최신 v2 migration이 Inventory Tracker의 다섯 테이블만 다시 만듭니다. 공유 Auth·workspace와 다른 앱 데이터는 건드리지 않습니다. 운영 적용 전에는 inventory 전용 백업과 별도 승인이 필요합니다.
+
+## 코드 구조
+
+- `App.tsx`: 인증 화면과 재고 작업 화면 연결
+- `components/InventoryWorkspace.tsx`: 페이지 영역 조합
+- `components/InventoryList.tsx`: 제품 그룹·카드·빈 상태 표시
+- `components/InventoryDialogs.tsx`: 입력·수정 다이얼로그 표시
+- `hooks/useInventoryWorkspaceController.ts`: 화면 상태와 사용자 작업 조정
+- `hooks/useInventoryViewModel.ts`: 검색·필터·예측·그룹 계산
+- `hooks/useInventory.ts`: 데이터와 변경 모듈을 합치는 공개 진입점
+- `hooks/inventory/`: 조회, 제품, 재고 기록, 구매, 백업, 입력 검증
 
 ## 로컬 최초 실행
 
