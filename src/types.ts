@@ -4,7 +4,6 @@ export type InventoryEventType =
   | "use"
   | "open"
   | "finish"
-  | "remainder"
   | "adjustment";
 export type InventoryFilter = "all" | "urgent" | "learning";
 export const PRODUCT_CATEGORIES = ["식료품", "화장품", "생활용품", "영양제", "의복", "미분류"] as const;
@@ -37,8 +36,6 @@ export interface InventoryProduct {
   current_consumer_count: number;
   active_opened_on: string | null;
   active_consumer_count: number | null;
-  active_remaining_quantity: number | null;
-  active_remaining_updated_on: string | null;
   preferred_store_id: string | null;
   notes: string | null;
   is_archived: boolean;

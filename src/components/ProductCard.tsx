@@ -35,7 +35,6 @@ interface ProductCardProps {
   onPurchaseAdd: () => void;
   onPurchaseBulk: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
-  onUsageCycleAdd: () => void;
   onUsageCycleEdit: (cycle: UsageCycle) => void;
 }
 
@@ -56,7 +55,6 @@ export function ProductCard({
   onPurchaseAdd,
   onPurchaseBulk,
   onPurchaseEdit,
-  onUsageCycleAdd,
   onUsageCycleEdit
 }: ProductCardProps) {
   const productEvents = events
@@ -72,9 +70,7 @@ export function ProductCard({
     : null;
   const isCycle = product.tracking_mode === "cycle";
   const stockInitialized = isStockInitialized(product);
-  const hasActiveProduct = Boolean(
-    product.active_opened_on || product.active_remaining_quantity !== null
-  );
+  const hasActiveProduct = Boolean(product.active_opened_on);
   const currentMeta = stockInitialized
     ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
     : "재고 미설정";
@@ -254,9 +250,7 @@ export function ProductCard({
                   disabled={busy || !stockInitialized || product.current_quantity <= 0}
                   onClick={() => onAction("open")}
                 >
-                  {product.active_remaining_quantity !== null
-                    ? "개봉 정보 입력"
-                    : "새 제품 개봉"}
+                  새 제품 개봉
                 </button>
               )
             ) : (
@@ -273,11 +267,6 @@ export function ProductCard({
             {isCycle && product.active_opened_on ? (
               <button type="button" disabled={busy} onClick={onActiveUsageEdit}>
                 사용 중 수정
-              </button>
-            ) : null}
-            {isCycle && product.active_opened_on ? (
-              <button type="button" disabled={busy} onClick={() => onAction("remainder")}>
-                현재 잔량
               </button>
             ) : null}
             <button type="button" disabled={busy} onClick={() => onAction("adjustment")}>
@@ -316,7 +305,7 @@ export function ProductCard({
                   <li key={event.id}>
                     <span>{formatDate(event.occurred_on)}</span>
                     <strong>
-                      {eventLabel(event, product.unit_label, product.capacity_unit)}
+                      {eventLabel(event, product.unit_label)}
                     </strong>
                     {event.note ? <small>{event.note}</small> : null}
                   </li>
@@ -364,14 +353,6 @@ export function ProductCard({
             <section className="history-section usage-cycle-section">
               <div className="section-heading">
                 <h3>사용 주기 기록</h3>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={onUsageCycleAdd}
-                >
-                  과거 기록 추가
-                </button>
               </div>
               {productCycles.length ? (
                 <details className="cycle-history">
@@ -426,16 +407,8 @@ function trackingModeLabel(product: InventoryProduct): string {
 function formatActiveMeta(product: InventoryProduct): string {
   if (!isStockInitialized(product)) return "현재 재고를 설정하면 개봉 기록을 시작할 수 있음";
 
-  const remaining =
-    product.active_remaining_quantity !== null && product.capacity_unit
-      ? ` · 약 ${formatQuantity(product.active_remaining_quantity)}${product.capacity_unit} 남음`
-      : "";
-
   if (product.active_opened_on) {
-    return `${formatDate(product.active_opened_on)} 개봉 · ${product.active_consumer_count || product.current_consumer_count}명 사용${remaining}`;
-  }
-  if (product.active_remaining_quantity !== null) {
-    return `현재 잔량${remaining} · 개봉일 미입력`;
+    return `${formatDate(product.active_opened_on)} 개봉 · ${product.active_consumer_count || product.current_consumer_count}명 사용`;
   }
   return product.current_quantity > 0
     ? "아직 개봉한 제품 없음"

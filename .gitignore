@@ -1,4 +1,5 @@
 README.md
+!supabase/README.md
 
 # Personal notes / local-only references
 docs/ideas/
@@ -15,6 +16,7 @@ docs/project specs/
 node_modules/
 dist/
 coverage/
+backups/
 *.tsbuildinfo
 .env
 .env.*

@@ -48,7 +48,7 @@ export function ArchivedProductsDialog({
       >
         <div className="editor-heading">
           <div>
-            <h2 id="archived-products-title">보관된 제품</h2>
+            <h2 id="archived-products-title">숨긴 제품</h2>
             <p>목록에서 숨긴 제품입니다. 모든 재고·사용·구매 기록은 그대로 유지됩니다.</p>
           </div>
           <button
@@ -65,7 +65,7 @@ export function ArchivedProductsDialog({
         {error ? <p className="form-error archived-products-error">{error}</p> : null}
 
         {loading ? (
-          <div className="archived-products-loading">보관된 제품을 불러오고 있습니다.</div>
+          <div className="archived-products-loading">숨긴 제품을 불러오고 있습니다.</div>
         ) : products.length ? (
           <ul className="archived-products-list">
             {products.map((product) => (
@@ -87,15 +87,15 @@ export function ArchivedProductsDialog({
                   disabled={busy}
                   onClick={() => void onRestore(product)}
                 >
-                  복원
+                  목록에 표시
                 </button>
               </li>
             ))}
           </ul>
         ) : (
           <div className="archived-products-empty">
-            <strong>보관된 제품이 없습니다.</strong>
-            <span>제품 설정에서 ‘제품 보관’을 누르면 이곳에서 다시 복원할 수 있습니다.</span>
+            <strong>숨긴 제품이 없습니다.</strong>
+            <span>제품 설정에서 ‘목록에서 숨기기’를 누르면 이곳에서 다시 표시할 수 있습니다.</span>
           </div>
         )}
 

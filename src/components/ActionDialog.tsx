@@ -65,11 +65,6 @@ export function ActionDialog({
     }
   }
 
-  const activeSummary =
-    product.active_remaining_quantity !== null && product.capacity_unit
-      ? ` · 현재 제품 약 ${formatQuantity(product.active_remaining_quantity)}${product.capacity_unit}`
-      : "";
-
   return (
     <div
       className="dialog-backdrop"
@@ -108,9 +103,7 @@ export function ActionDialog({
               : "미설정"}
           </strong>
           {product.active_opened_on ? (
-            <span> · {formatDate(product.active_opened_on)} 개봉{activeSummary}</span>
-          ) : product.active_remaining_quantity !== null ? (
-            <span>{activeSummary} · 개봉일 미입력</span>
+            <span> · {formatDate(product.active_opened_on)} 개봉</span>
           ) : null}
         </div>
 
@@ -162,57 +155,19 @@ export function ActionDialog({
           ) : null}
 
           {action === "open" ? (
-            <>
-              <label>
-                <span className="field-label">현재 제품 잔량</span>
-                <div className="input-with-unit">
-                  <input
-                    type="number"
-                    min="0"
-                    max={product.package_size || undefined}
-                    step="any"
-                    autoFocus
-                    value={draft.amount}
-                    onChange={(event) => update("amount", event.target.value)}
-                  />
-                  <span>{product.capacity_unit || "용량"}</span>
-                </div>
-                <span className="field-hint">
-                  새 제품이면 전체 용량을 그대로 두고, 이미 사용 중이었다면 현재 남은 양을 입력합니다.
-                </span>
-              </label>
-              <label>
-                <span className="field-label">함께 사용하는 사람 수</span>
-                <div className="input-with-unit">
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={draft.consumerCount}
-                    onChange={(event) => update("consumerCount", event.target.value)}
-                  />
-                  <span>명</span>
-                </div>
-              </label>
-            </>
-          ) : null}
-
-          {action === "remainder" ? (
             <label>
-              <span className="field-label">지금 확인핔 현재 제품 잔량</span>
+              <span className="field-label">함께 사용하는 사람 수</span>
               <div className="input-with-unit">
                 <input
                   type="number"
-                  min="0"
-                  max={product.package_size || undefined}
-                  step="any"
+                  min="1"
+                  step="1"
                   autoFocus
-                  value={draft.amount}
-                  onChange={(event) => update("amount", event.target.value)}
+                  value={draft.consumerCount}
+                  onChange={(event) => update("consumerCount", event.target.value)}
                 />
-                <span>{product.capacity_unit || "용량"}</span>
+                <span>명</span>
               </div>
-              <span className="field-hint">전체 재고 개수는 바뀌지 않습니다.</span>
             </label>
           ) : null}
 
@@ -229,11 +184,7 @@ export function ActionDialog({
             <span className="field-label">기록 날짜</span>
             <input
               type="date"
-              min={
-                action === "finish" || action === "remainder"
-                  ? product.active_opened_on || undefined
-                  : undefined
-              }
+              min={action === "finish" ? product.active_opened_on || undefined : undefined}
               max={todayIso()}
               value={draft.occurredOn}
               onChange={(event) => update("occurredOn", event.target.value)}
@@ -241,12 +192,12 @@ export function ActionDialog({
             <span className="field-hint">며칠 전에 한 일을 지금 기록해도 됩니다.</span>
           </label>
 
-          {action === "adjustment" || action === "remainder" ? (
+          {action === "adjustment" ? (
             <label>
               <span className="field-label">메모 · 선택</span>
               <textarea
                 value={draft.note}
-                placeholder={action === "remainder" ? "예: 병 눈금으로 대략 확인" : "예: 냉동실 직접 확인"}
+                placeholder="예: 냉동실 직접 확인"
                 onChange={(event) => update("note", event.target.value)}
               />
             </label>
@@ -272,14 +223,8 @@ function makeDraft(
   product: InventoryProduct,
   action: InventoryAction
 ): InventoryActionDraft {
-  const cycleAmount =
-    product.active_remaining_quantity ?? product.package_size ?? 0;
-
   return {
-    amount:
-      action === "open" || action === "remainder"
-        ? String(cycleAmount)
-        : "1",
+    amount: "1",
     targetQuantity: isStockInitialized(product) ? String(product.current_quantity) : "",
     occurredOn: todayIso(),
     consumerCount: String(product.current_consumer_count || 1),
@@ -310,8 +255,8 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
       };
     case "open":
       return {
-        title: product.active_remaining_quantity !== null ? "개봉 정보 입력" : "새 제품 개봉",
-        description: "개봉일과 현재 잔량을 저장해 이 제품 하나의 사용 기간을 측정합니다.",
+        title: "새 제품 개봉",
+        description: "개봉일과 사용 인원을 저장해 이 제품 하나의 사용 기간을 측정합니다.",
         submitLabel: "개봉 기록"
       };
     case "finish":
@@ -319,12 +264,6 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
         title: "다 씀",
         description: "사용 중인 제품 하나의 사용 기간을 완료하고 재고 개수를 1 줄입니다.",
         submitLabel: "소진 기록"
-      };
-    case "remainder":
-      return {
-        title: "현재 제품 잔량",
-        description: "사용 중인 제품의 남은 g·ml만 바로잡습니다. 전체 통·병 개수는 그대로입니다.",
-        submitLabel: "잔량 저장"
       };
     case "adjustment":
     default:

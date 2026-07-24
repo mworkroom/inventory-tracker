@@ -29,8 +29,6 @@ const baseProduct: InventoryProduct = {
   current_consumer_count: 1,
   active_opened_on: null,
   active_consumer_count: null,
-  active_remaining_quantity: null,
-  active_remaining_updated_on: null,
   preferred_store_id: null,
   notes: null,
   is_archived: false,
@@ -106,14 +104,12 @@ test("두 명이 76일 쓴 1600ml 제품은 한 명 기준 약 152일로 보정�
   assert.ok(Math.abs((estimate.perPersonDailyCapacity || 0) - 10.5263) < 0.001);
 });
 
-test("개봉 제품 300ml와 미개봉 1통은 각각 남은 기간에 반영한다", () => {
+test("개봉 후 지난 기간과 미개봉 1통을 각각 남은 기간에 반영한다", () => {
   const product: InventoryProduct = {
     ...baseProduct,
     current_quantity: 2,
     active_opened_on: "2026-04-12",
-    active_consumer_count: 1,
-    active_remaining_quantity: 300,
-    active_remaining_updated_on: "2026-07-19"
+    active_consumer_count: 1
   };
   const estimate = estimateProduct(
     product,
@@ -122,7 +118,7 @@ test("개봉 제품 300ml와 미개봉 1통은 각각 남은 기간에 반영한
     "2026-07-19"
   );
   assert.equal(estimate.expectedCycleDays, 160);
-  assert.equal(estimate.remainingDays, 190);
+  assert.equal(estimate.remainingDays, 62 + 160);
 });
 
 test("개수 직접 차감은 최근 사용 간격의 중앙값으로 남은 기간을 계산한다", () => {

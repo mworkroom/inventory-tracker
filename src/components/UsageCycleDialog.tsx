@@ -5,11 +5,11 @@ import { CloseIcon } from "./Icons";
 
 interface UsageCycleDialogProps {
   product: InventoryProduct;
-  cycle: UsageCycle | null;
+  cycle: UsageCycle;
   busy: boolean;
   onClose: () => void;
   onSubmit: (draft: UsageCycleDraft) => Promise<void>;
-  onDelete: (() => Promise<void>) | null;
+  onDelete: () => Promise<void>;
 }
 
 export function UsageCycleDialog({
@@ -80,7 +80,7 @@ export function UsageCycleDialog({
   }
 
   async function confirmDelete() {
-    if (!onDelete || busy) return;
+    if (busy) return;
     if (!deleteArmed) {
       setDeleteArmed(true);
       return;
@@ -93,8 +93,6 @@ export function UsageCycleDialog({
       setFormError(caught instanceof Error ? caught.message : "사용 주기를 삭제하지 못했습니다.");
     }
   }
-
-  const isEdit = Boolean(cycle);
 
   return (
     <div
@@ -113,14 +111,8 @@ export function UsageCycleDialog({
         <div className="editor-heading">
           <div>
             <span className="dialog-product-name">{product.name}</span>
-            <h2 id="usage-cycle-dialog-title">
-              {isEdit ? "사용 주기 수정" : "과거 사용 주기 추가"}
-            </h2>
-            <p>
-              {isEdit
-                ? "잘못 입력한 기간과 사용 인원을 바로잡습니다."
-                : "이미 다 쓴 제품의 사용 기간을 재고 변화 없이 학습 자료로 저장합니다."}
-            </p>
+            <h2 id="usage-cycle-dialog-title">사용 주기 수정</h2>
+            <p>자동 기록된 기간이나 사용 인원이 잘못된 경우에만 바로잡습니다.</p>
           </div>
           <button
             type="button"
@@ -177,22 +169,20 @@ export function UsageCycleDialog({
 
           {formError ? <p className="form-error">{formError}</p> : null}
 
-          <div className={`dialog-actions${isEdit ? " purchase-edit-actions" : ""}`}>
-            {isEdit ? (
-              <button
-                type="button"
-                className="danger-button"
-                disabled={busy}
-                onClick={() => void confirmDelete()}
-              >
-                {deleteArmed ? "한 번 더 눌러 삭제" : "삭제"}
-              </button>
-            ) : null}
+          <div className="dialog-actions purchase-edit-actions">
+            <button
+              type="button"
+              className="danger-button"
+              disabled={busy}
+              onClick={() => void confirmDelete()}
+            >
+              {deleteArmed ? "한 번 더 눌러 삭제" : "삭제"}
+            </button>
             <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>
               취소
             </button>
             <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? "저장 중…" : isEdit ? "수정 저장" : "과거 사용 주기 저장"}
+              {busy ? "저장 중…" : "수정 저장"}
             </button>
           </div>
         </form>
@@ -201,10 +191,10 @@ export function UsageCycleDialog({
   );
 }
 
-function makeDraft(cycle: UsageCycle | null): UsageCycleDraft {
+function makeDraft(cycle: UsageCycle): UsageCycleDraft {
   return {
-    openedOn: cycle?.opened_on || "",
-    finishedOn: cycle?.finished_on || todayIso(),
-    consumerCount: String(cycle?.consumer_count || 1)
+    openedOn: cycle.opened_on,
+    finishedOn: cycle.finished_on,
+    consumerCount: String(cycle.consumer_count)
   };
 }

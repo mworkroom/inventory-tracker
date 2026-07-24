@@ -56,7 +56,7 @@ export function Header({
               disabled={busy}
               onClick={() => runAndClose(onOpenArchived)}
             >
-              보관된 제품
+              숨긴 제품
               {archivedCount > 0 ? <small className="menu-count">{archivedCount}</small> : null}
             </button>
             <button

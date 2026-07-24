@@ -55,7 +55,7 @@ type PurchaseState = {
 
 type UsageCycleState = {
   product: InventoryProduct;
-  cycle: UsageCycle | null;
+  cycle: UsageCycle;
 } | null;
 
 interface StoreGroup {
@@ -252,13 +252,8 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
 
   async function saveUsageCycle(draft: UsageCycleDraft) {
     if (!usageCycleState) return;
-    if (usageCycleState.cycle) {
-      await inventory.updateUsageCycle(usageCycleState.cycle, draft);
-      showToast("사용 주기를 수정했습니다.");
-    } else {
-      await inventory.createUsageCycle(usageCycleState.product, draft);
-      showToast("과거 사용 주기를 저장했습니다.");
-    }
+    await inventory.updateUsageCycle(usageCycleState.cycle, draft);
+    showToast("사용 주기를 수정했습니다.");
     setExpandedId(usageCycleState.product.id);
     setUsageCycleState(null);
   }
@@ -296,7 +291,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     await inventory.refresh(true);
     setEditorProduct(undefined);
     setExpandedId(null);
-    showToast(`${name}을 보관했습니다.`);
+    showToast(`${name}을 목록에서 숨겼습니다.`);
   }
 
   async function deleteEditedProduct() {
@@ -312,7 +307,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   async function restoreArchivedProduct(product: InventoryProduct) {
     await lifecycle.restoreProduct(product);
     await inventory.refresh(true);
-    showToast(`${product.name}을 목록으로 복원했습니다.`);
+    showToast(`${product.name}을 목록에 다시 표시했습니다.`);
   }
 
   function showToast(message: string) {
@@ -376,7 +371,6 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         onPurchaseEdit={(purchase) =>
           setPurchaseState({ product, mode: "edit", purchase })
         }
-        onUsageCycleAdd={() => setUsageCycleState({ product, cycle: null })}
         onUsageCycleEdit={(cycle) => setUsageCycleState({ product, cycle })}
       />
     );
@@ -549,7 +543,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           busy={busy}
           onClose={() => setUsageCycleState(null)}
           onSubmit={saveUsageCycle}
-          onDelete={usageCycleState.cycle ? deleteUsageCycle : null}
+          onDelete={deleteUsageCycle}
         />
       ) : null}
 

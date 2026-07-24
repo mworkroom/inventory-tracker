@@ -114,45 +114,24 @@ function estimateCycleProduct(
   let remainingDays: number | null = null;
 
   if (expectedCycleDays !== null && expectedCycleDays > 0) {
-    const hasActiveProduct = Boolean(
-      product.active_opened_on || product.active_remaining_quantity !== null
-    );
+    const hasActiveProduct = Boolean(product.active_opened_on);
     const unopenedUnits = Math.max(
       0,
       product.current_quantity - (hasActiveProduct ? 1 : 0)
     );
     let activeRemainingDays = 0;
 
-    if (hasActiveProduct) {
-      if (
-        product.package_size &&
-        product.package_size > 0 &&
-        product.active_remaining_quantity !== null
-      ) {
-        const dailyCapacity = product.package_size / expectedCycleDays;
-        const measuredOn =
-          product.active_remaining_updated_on || product.active_opened_on || today;
-        const elapsedSinceMeasurement = Math.max(0, daysBetween(measuredOn, today));
-        const estimatedRemainingCapacity = Math.max(
-          0,
-          product.active_remaining_quantity - elapsedSinceMeasurement * dailyCapacity
-        );
-        activeRemainingDays = estimatedRemainingCapacity / dailyCapacity;
-      } else if (product.active_opened_on) {
-        const elapsedDays = Math.max(
-          0,
-          daysBetween(product.active_opened_on, today)
-        );
-        activeRemainingDays = Math.max(0, expectedCycleDays - elapsedDays);
-      } else {
-        activeRemainingDays = expectedCycleDays;
-      }
+    if (product.active_opened_on) {
+      const elapsedDays = Math.max(
+        0,
+        daysBetween(product.active_opened_on, today)
+      );
+      activeRemainingDays = Math.max(0, expectedCycleDays - elapsedDays);
     }
 
-    remainingDays = activeRemainingDays + unopenedUnits * expectedCycleDays;
-    if (!hasActiveProduct) {
-      remainingDays = product.current_quantity * expectedCycleDays;
-    }
+    remainingDays = hasActiveProduct
+      ? activeRemainingDays + unopenedUnits * expectedCycleDays
+      : product.current_quantity * expectedCycleDays;
   }
 
   const estimatedOutDate =
@@ -400,8 +379,7 @@ export function formatApproxDays(value: number | null): string {
 
 export function eventLabel(
   event: InventoryEvent,
-  unitLabel: string,
-  capacityUnit?: string | null
+  unitLabel: string
 ): string {
   const amount = formatQuantity(Math.abs(event.quantity_delta));
   switch (event.event_type) {
@@ -413,8 +391,6 @@ export function eventLabel(
       return `새 제품 개봉${event.consumer_count ? ` · ${event.consumer_count}명` : ""}`;
     case "finish":
       return `다 씀${event.consumer_count ? ` · ${event.consumer_count}명` : ""}`;
-    case "remainder":
-      return `현재 제품 잔량 ${event.note || (capacityUnit ? `정정 (${capacityUnit})` : "정정")}`;
     case "adjustment":
       return `재고 ${formatQuantity(event.quantity_after)}${unitLabel}로 정정`;
   }
@@ -430,8 +406,6 @@ export function actionPastTense(action: string): string {
       return "개봉을";
     case "finish":
       return "소진을";
-    case "remainder":
-      return "현재 잔량을";
     case "adjustment":
       return "재고 정정을";
     default:
