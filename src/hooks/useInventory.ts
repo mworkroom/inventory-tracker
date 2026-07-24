@@ -70,7 +70,6 @@ interface InventoryState {
   ) => Promise<InventoryPurchase>;
   deletePurchase: (purchase: InventoryPurchase) => Promise<void>;
   exportBackup: () => Promise<void>;
-  clearError: () => void;
 }
 
 export function useInventory(userId: string): InventoryState {
@@ -626,8 +625,7 @@ export function useInventory(userId: string): InventoryState {
     createPurchaseBatch,
     updatePurchase,
     deletePurchase,
-    exportBackup,
-    clearError: () => setError(null)
+    exportBackup
   };
 }
 

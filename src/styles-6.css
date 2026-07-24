@@ -36,9 +36,6 @@
   cursor: wait;
 }
 
-@media (max-width: 720px) {
-}
-
 @media (max-width: 390px) {
   .quick-actions.cycle-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));

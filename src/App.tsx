@@ -471,11 +471,7 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
         <span>
           {viewMode === "store"
             ? `구매처 ${storeGroups.length}곳 · 제품 ${visibleProducts.length}개`
-            : viewMode === "category"
-              ? `카테고리 ${categoryGroups.length}개 · 제품 ${visibleProducts.length}개`
-            : query || filter !== "all"
-              ? `${visibleProducts.length}개 표시 중`
-              : `제품 ${inventory.products.length}개`}
+            : `카테고리 ${categoryGroups.length}개 · 제품 ${visibleProducts.length}개`}
         </span>
         {inventory.lastLoadedAt ? (
           <small>
@@ -495,51 +491,45 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           ))}
         </div>
       ) : visibleProducts.length ? (
-        viewMode === "store" || viewMode === "category" ? (
-          <section
-            className="store-groups"
-            aria-label={viewMode === "store" ? "주구매처별 재고 목록" : "카테고리별 재고 목록"}
-          >
-            {activeGroups.map((group) => {
-              const stockAttentionCount = group.products.filter((product) => {
-                const estimate = estimates.get(product.id);
-                return estimate
-                  ? getInventoryAttentionKind(product, estimate) !== null
-                  : false;
-              }).length;
-              const repurchaseDueCount = group.products.filter((product) => {
-                const stats = purchaseStats.get(product.id);
-                return stats ? isRepurchaseDue(product, stats) : false;
-              }).length;
+        <section
+          className="store-groups"
+          aria-label={viewMode === "store" ? "주구매처별 재고 목록" : "카테고리별 재고 목록"}
+        >
+          {activeGroups.map((group) => {
+            const stockAttentionCount = group.products.filter((product) => {
+              const estimate = estimates.get(product.id);
+              return estimate
+                ? getInventoryAttentionKind(product, estimate) !== null
+                : false;
+            }).length;
+            const repurchaseDueCount = group.products.filter((product) => {
+              const stats = purchaseStats.get(product.id);
+              return stats ? isRepurchaseDue(product, stats) : false;
+            }).length;
 
-              return (
-                <section key={group.key} className="store-group">
-                  <header className="store-group-heading">
-                    <div>
-                      <strong>{group.name}</strong>
-                      <span>{group.products.length}개</span>
-                    </div>
-                    <small>
-                      {stockAttentionCount > 0
-                        ? `재고·소진 확인 ${stockAttentionCount}`
-                        : "재고·소진 확인 없음"}
-                      {repurchaseDueCount > 0
-                        ? ` · 재구매 시기 ${repurchaseDueCount}`
-                        : ""}
-                    </small>
-                  </header>
-                  <div className="product-list">
-                    {group.products.map(renderProductCard)}
+            return (
+              <section key={group.key} className="store-group">
+                <header className="store-group-heading">
+                  <div>
+                    <strong>{group.name}</strong>
+                    <span>{group.products.length}개</span>
                   </div>
-                </section>
-              );
-            })}
-          </section>
-        ) : (
-          <section className="product-list" aria-label="재고 목록">
-            {visibleProducts.map(renderProductCard)}
-          </section>
-        )
+                  <small>
+                    {stockAttentionCount > 0
+                      ? `재고·소진 확인 ${stockAttentionCount}`
+                      : "재고·소진 확인 없음"}
+                    {repurchaseDueCount > 0
+                      ? ` · 재구매 시기 ${repurchaseDueCount}`
+                      : ""}
+                  </small>
+                </header>
+                <div className="product-list">
+                  {group.products.map(renderProductCard)}
+                </div>
+              </section>
+            );
+          })}
+        </section>
       ) : inventory.products.length === 0 ? (
         <section className="empty-state">
           <strong>아직 등록한 제품이 없습니다.</strong>
