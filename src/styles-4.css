@@ -17,7 +17,7 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 850;
 }
 
@@ -57,7 +57,7 @@
 
 .store-group-heading strong {
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -66,7 +66,7 @@
 .store-group-heading small,
 .purchase-history-section .section-heading > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 750;
 }
 
@@ -89,7 +89,7 @@
   border-radius: var(--radius);
   background: var(--panel);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
@@ -110,7 +110,7 @@
 .purchase-action-note {
   margin: 6px 1px 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   text-align: center;
 }
 
@@ -151,19 +151,19 @@
 
 .purchase-history-list span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 750;
 }
 
 .purchase-history-list strong {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.4;
 }
 
 .purchase-history-list small,
 .purchase-history-list em {
   color: #737d89;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-style: normal;
   line-height: 1.4;
 }
@@ -190,17 +190,18 @@
 }
 
 .purchase-dialog-callout strong {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .purchase-dialog-callout span {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.45;
 }
 
 .action-form select {
   width: 100%;
-  min-height: 54px;
+  height: var(--form-select-height);
+  min-height: var(--form-select-height);
   min-width: 0;
   max-width: 100%;
   padding: 0 14px;
@@ -208,6 +209,7 @@
   border-radius: var(--radius);
   background: var(--panel);
   color: var(--text);
+  font-size: var(--font-size-base);
   outline: none;
 }
 
@@ -227,11 +229,11 @@
 
 .purchase-edit-summary span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .purchase-edit-summary strong {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.4;
 }
 
@@ -246,7 +248,7 @@
   }
 
   .store-group-heading strong {
-    font-size: 14px;
+    font-size: var(--font-size-base);
   }
 
   .purchase-dialog {

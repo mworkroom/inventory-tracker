@@ -4,7 +4,7 @@
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 900;
 }
 
@@ -28,12 +28,12 @@
 }
 
 .product-management-heading h3 {
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 .product-management-heading p {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.45;
 }
 
@@ -55,12 +55,12 @@
 }
 
 .product-management-action strong {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .product-management-action span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.45;
 }
 
@@ -70,7 +70,7 @@
   padding: 0 12px;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
@@ -144,14 +144,14 @@
 
 .archived-products-list strong {
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .archived-products-list span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.45;
 }
 
@@ -169,14 +169,14 @@
   border: 1px dashed var(--line);
   border-radius: var(--radius);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   text-align: center;
 }
 
 .archived-products-empty strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-base);
 }
 
 .archived-dialog-actions {

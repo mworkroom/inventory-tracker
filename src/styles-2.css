@@ -9,12 +9,12 @@
 }
 
 .status-callout strong {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 900;
 }
 
 .status-callout span {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
@@ -52,14 +52,14 @@
 
 .info-row dt {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 750;
 }
 
 .info-row dd {
   min-width: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 800;
   line-height: 1.5;
   text-align: right;
@@ -85,7 +85,7 @@
   border-radius: var(--radius);
   background: var(--panel);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
@@ -104,7 +104,7 @@
 }
 
 .quick-actions button > span {
-  font-size: 17px;
+  font-size: var(--font-size-lg);
   line-height: 1;
 }
 
@@ -123,7 +123,7 @@
 
 .section-heading h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 .text-button {
@@ -132,7 +132,7 @@
   background: transparent;
   color: var(--accent-strong);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
@@ -163,14 +163,14 @@
 .history-list span,
 .cycle-history span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 750;
 }
 
 .history-list strong,
 .cycle-history strong {
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.35;
   text-align: right;
 }
@@ -178,7 +178,7 @@
 .history-list small {
   grid-column: 2;
   color: #7c8693;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.4;
   text-align: right;
 }
@@ -189,7 +189,7 @@
   border: 1px dashed var(--line);
   border-radius: var(--radius);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   text-align: center;
 }
 
@@ -205,7 +205,7 @@
   padding: 11px 12px;
   cursor: pointer;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 850;
 }
 
@@ -235,7 +235,7 @@
   border-radius: var(--radius);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 750;
   line-height: 1.45;
 }
@@ -248,7 +248,7 @@
   background: white;
   color: var(--danger);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 900;
 }
 
@@ -265,12 +265,12 @@
 
 .empty-state strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 .empty-state span {
   max-width: 360px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.55;
 }
 
@@ -339,14 +339,14 @@
 
 .editor-heading h2 {
   margin: 0;
-  font-size: 21px;
+  font-size: var(--font-size-title);
   line-height: 1.25;
 }
 
 .editor-heading p {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.45;
 }
 
@@ -354,7 +354,7 @@
   display: block;
   margin-bottom: 3px;
   color: var(--accent-strong);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
@@ -394,7 +394,7 @@
 
 .form-section h3 {
   margin: 0 0 1px;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 .compact-section {
@@ -411,14 +411,14 @@
 
 .field-label {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 850;
 }
 
 .field-hint,
 .read-only-field small {
   color: #7c8693;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.45;
 }
 
@@ -426,6 +426,7 @@
 .product-form select,
 .product-form textarea,
 .action-form input,
+.action-form select,
 .action-form textarea {
   width: 100%;
   min-width: 0;
@@ -449,7 +450,7 @@
   overflow: hidden;
   -webkit-appearance: none;
   appearance: none;
-  font-size: 16px;
+  font-size: var(--font-size-base);
 }
 
 .product-form input[type="date"]::-webkit-date-and-time-value,
@@ -459,7 +460,6 @@
 }
 
 .product-form input:not([type="date"]),
-.product-form select,
 .action-form input:not([type="date"]) {
   min-height: 46px;
   padding: 0 12px;
@@ -467,8 +467,11 @@
 
 .product-form select,
 .action-form select {
-  min-height: 54px;
+  height: var(--form-select-height);
+  min-height: var(--form-select-height);
   padding: 0 14px;
+  font-size: var(--font-size-base);
+  line-height: normal;
 }
 
 .product-form textarea,
@@ -482,6 +485,7 @@
 .product-form select:focus,
 .product-form textarea:focus,
 .action-form input:focus,
+.action-form select:focus,
 .action-form textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px rgba(149, 149, 149, 0.13);

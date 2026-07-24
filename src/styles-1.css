@@ -5,6 +5,14 @@
   background: #f4f5f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  font-size: 100%;
+  --font-size-xs: 0.8125rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-title: 1.5rem;
+  --form-select-height: 60px;
   --bg: #ffffff;
   --panel: #ffffff;
   --text: #111827;
@@ -32,6 +40,8 @@ html {
   min-width: 320px;
   min-height: 100%;
   background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @font-face {
@@ -48,6 +58,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
 }
 
 button,
@@ -115,7 +127,7 @@ button:disabled {
   min-width: 0;
   margin: 0;
   font-family: 'Dohyun', Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1.45rem;
+  font-size: var(--font-size-title);
   font-weight: 900;
   letter-spacing: -0.03em;
 }
@@ -139,7 +151,7 @@ button:disabled {
   background: rgba(255, 255, 255, 0.14);
   color: white;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 850;
 }
 
@@ -149,7 +161,7 @@ button:disabled {
 }
 
 .topbar-button > span:first-child {
-  font-size: 20px;
+  font-size: var(--font-size-xl);
   line-height: 1;
 }
 
@@ -201,13 +213,13 @@ button:disabled {
 
 .topbar-menu-account span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 800;
 }
 
 .topbar-menu-account strong {
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -223,7 +235,7 @@ button:disabled {
   border-bottom: 1px solid var(--line-soft);
   background: var(--panel);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 800;
   text-align: left;
 }
@@ -263,7 +275,7 @@ button:disabled {
   background: var(--panel);
   color: var(--text);
   box-shadow: var(--shadow);
-  font-size: 16px;
+  font-size: var(--font-size-base);
   outline: none;
 }
 
@@ -327,7 +339,7 @@ button:disabled {
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--font-size-base);
   font-weight: 850;
 }
 
@@ -353,7 +365,7 @@ button:disabled {
   border-radius: 999px;
   background: #eef0f2;
   color: #59616c;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .filter-tabs button.active small {
@@ -369,12 +381,12 @@ button:disabled {
   min-height: 30px;
   padding: 0 3px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 800;
 }
 
 .list-heading small {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
 }
 
@@ -447,7 +459,7 @@ button:disabled {
 
 .product-summary-copy strong {
   overflow: hidden;
-  font-size: 18px;
+  font-size: var(--font-size-lg);
   font-weight: 900;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -457,7 +469,7 @@ button:disabled {
 .product-summary-meta {
   overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 750;
   line-height: 1.25;
   text-overflow: ellipsis;
