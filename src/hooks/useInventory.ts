@@ -43,6 +43,10 @@ interface InventoryState {
     action: InventoryAction,
     draft: InventoryActionDraft
   ) => Promise<InventoryProduct>;
+  correctEventAmount: (
+    event: InventoryEvent,
+    amount: string
+  ) => Promise<InventoryProduct>;
   updateActiveUsage: (
     product: InventoryProduct,
     draft: ActiveUsageDraft
@@ -371,6 +375,37 @@ export function useInventory(userId: string): InventoryState {
     [refresh]
   );
 
+  const correctEventAmount = useCallback(
+    async (event: InventoryEvent, amount: string) => {
+      if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+      if (event.event_type !== "intake" && event.event_type !== "use") {
+        throw new Error("입고 또는 사용 기록의 수량만 수정할 수 있습니다.");
+      }
+
+      setBusy(true);
+      setError(null);
+      try {
+        const { data, error: rpcError } = await supabase.rpc(
+          "correct_latest_inventory_event_amount",
+          {
+            p_event_id: event.id,
+            p_amount: parseRequiredNumber(amount, "수정 수량")
+          }
+        );
+        if (rpcError) throw rpcError;
+        await refresh(true);
+        return data as InventoryProduct;
+      } catch (caught) {
+        const message = readableError(caught);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh]
+  );
+
   const updateUsageCycle = useCallback(
     async (cycle: UsageCycle, draft: UsageCycleDraft) => {
       if (!supabase) throw new Error("Supabase 연결이 없습니다.");
@@ -583,6 +618,7 @@ export function useInventory(userId: string): InventoryState {
     createProduct,
     updateProduct,
     recordAction,
+    correctEventAmount,
     updateActiveUsage,
     updateUsageCycle,
     deleteUsageCycle,

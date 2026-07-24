@@ -3,6 +3,7 @@ import { ActionDialog } from "./components/ActionDialog";
 import { ActiveUsageDialog } from "./components/ActiveUsageDialog";
 import { ArchivedProductsDialog } from "./components/ArchivedProductsDialog";
 import { AuthGate, type AuthorizedContext } from "./components/AuthGate";
+import { EventAmountDialog } from "./components/EventAmountDialog";
 import { FilterTabs } from "./components/FilterTabs";
 import { Header } from "./components/Header";
 import { ProductCard } from "./components/ProductCard";
@@ -58,6 +59,11 @@ type UsageCycleState = {
   cycle: UsageCycle;
 } | null;
 
+type EventCorrectionState = {
+  product: InventoryProduct;
+  event: InventoryEvent;
+} | null;
+
 interface StoreGroup {
   key: string;
   name: string;
@@ -82,6 +88,8 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
   const [purchaseState, setPurchaseState] = useState<PurchaseState>(null);
   const [activeUsageProduct, setActiveUsageProduct] = useState<InventoryProduct | null>(null);
   const [usageCycleState, setUsageCycleState] = useState<UsageCycleState>(null);
+  const [eventCorrectionState, setEventCorrectionState] =
+    useState<EventCorrectionState>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const busy = inventory.busy || lifecycle.busy;
@@ -266,6 +274,17 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
     showToast("사용 중 정보와 개봉 기록을 함께 수정했습니다.");
   }
 
+  async function saveEventAmount(amount: string) {
+    if (!eventCorrectionState) return;
+    const saved = await inventory.correctEventAmount(
+      eventCorrectionState.event,
+      amount
+    );
+    setExpandedId(saved.id);
+    setEventCorrectionState(null);
+    showToast("재고 기록 수량과 현재 재고를 함께 수정했습니다.");
+  }
+
   async function deleteUsageCycle() {
     if (!usageCycleState?.cycle) return;
     const productId = usageCycleState.product.id;
@@ -372,6 +391,9 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           setPurchaseState({ product, mode: "edit", purchase })
         }
         onUsageCycleEdit={(cycle) => setUsageCycleState({ product, cycle })}
+        onEventAmountEdit={(event) =>
+          setEventCorrectionState({ product, event })
+        }
       />
     );
   }
@@ -544,6 +566,16 @@ function InventoryWorkspace({ userId, email, signOut }: AuthorizedContext) {
           onClose={() => setUsageCycleState(null)}
           onSubmit={saveUsageCycle}
           onDelete={deleteUsageCycle}
+        />
+      ) : null}
+
+      {eventCorrectionState ? (
+        <EventAmountDialog
+          product={eventCorrectionState.product}
+          event={eventCorrectionState.event}
+          busy={busy}
+          onClose={() => setEventCorrectionState(null)}
+          onSubmit={saveEventAmount}
         />
       ) : null}
 

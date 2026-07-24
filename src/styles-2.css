@@ -175,6 +175,31 @@
   text-align: right;
 }
 
+.history-entry-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.history-edit-button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  font-weight: 900;
+}
+
+.history-edit-button:hover {
+  background: var(--accent-soft);
+}
+
 .history-list small {
   grid-column: 2;
   color: #7c8693;

@@ -16,7 +16,8 @@ assert.deepEqual(
     "20260724194457_rebuild_inventory_tracker_v2.sql",
     "20260724194709_add_inventory_foreign_key_indexes.sql",
     "20260724203523_separate_product_creation_from_inventory_events.sql",
-    "20260724205237_use_seoul_inventory_business_date.sql"
+    "20260724205237_use_seoul_inventory_business_date.sql",
+    "20260724212046_correct_latest_inventory_event_amount.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -36,6 +37,13 @@ const businessDateSql = await readFile(
   join(
     migrationsDirectory,
     "20260724205237_use_seoul_inventory_business_date.sql"
+  ),
+  "utf8"
+);
+const eventCorrectionSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260724212046_correct_latest_inventory_event_amount.sql"
   ),
   "utf8"
 );
@@ -104,6 +112,36 @@ assert.match(
   businessDateSql,
   /p_opened_on > \(now\(\) at time zone 'Asia\/Seoul'\)::date/,
   "현재 개봉일 검사가 한국 날짜 기준이 아닙니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /create function public\.correct_latest_inventory_event_amount\(/,
+  "마지막 재고 기록 수량 정정 RPC가 없습니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /security definer[\s\S]*?set search_path = ''/,
+  "재고 기록 수량 정정 RPC의 권한 경계가 안전하지 않습니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /private\.is_workspace_member\(v_product\.workspace_id\)/,
+  "재고 기록 수량 정정 RPC에 workspace 멤버 검사가 없습니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /later\.created_at > v_event\.created_at/,
+  "마지막 재고 기록만 수정하도록 제한하지 않았습니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /v_product\.current_quantity <> v_event\.quantity_after/,
+  "현재 재고와 원장의 일치 여부를 확인하지 않습니다."
+);
+assert.match(
+  eventCorrectionSql,
+  /revoke all on function public\.correct_latest_inventory_event_amount\(uuid, numeric\)[\s\S]*?grant execute on function public\.correct_latest_inventory_event_amount\(uuid, numeric\)[\s\S]*?to authenticated;/,
+  "재고 기록 수량 정정 RPC의 실행 권한이 올바르지 않습니다."
 );
 
 for (const functionName of [

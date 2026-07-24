@@ -36,6 +36,7 @@ interface ProductCardProps {
   onPurchaseBulk: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
   onUsageCycleEdit: (cycle: UsageCycle) => void;
+  onEventAmountEdit: (event: InventoryEvent) => void;
 }
 
 export function ProductCard({
@@ -55,11 +56,22 @@ export function ProductCard({
   onPurchaseAdd,
   onPurchaseBulk,
   onPurchaseEdit,
-  onUsageCycleEdit
+  onUsageCycleEdit,
+  onEventAmountEdit
 }: ProductCardProps) {
-  const productEvents = events
-    .filter((event) => event.product_id === product.id)
-    .slice(0, 5);
+  const allProductEvents = events.filter(
+    (event) => event.product_id === product.id
+  );
+  const productEvents = allProductEvents.slice(0, 5);
+  const latestRecordedEvent = allProductEvents.reduce<InventoryEvent | null>(
+    (latest, event) => {
+      if (!latest) return event;
+      const timeComparison = event.created_at.localeCompare(latest.created_at);
+      if (timeComparison !== 0) return timeComparison > 0 ? event : latest;
+      return event.id > latest.id ? event : latest;
+    },
+    null
+  );
   const productCycles = cycles
     .filter((cycle) => cycle.product_id === product.id)
     .slice(0, 3);
@@ -304,9 +316,25 @@ export function ProductCard({
                 {productEvents.map((event) => (
                   <li key={event.id}>
                     <span>{formatDate(event.occurred_on)}</span>
-                    <strong>
-                      {eventLabel(event, product.unit_label)}
-                    </strong>
+                    <div className="history-entry-copy">
+                      <strong>
+                        {eventLabel(event, product.unit_label)}
+                      </strong>
+                      {product.tracking_mode === "count" &&
+                      latestRecordedEvent?.id === event.id &&
+                      (event.event_type === "intake" ||
+                        event.event_type === "use") ? (
+                        <button
+                          type="button"
+                          className="history-edit-button"
+                          disabled={busy}
+                          aria-label={`${formatDate(event.occurred_on)} ${event.event_type === "intake" ? "입고" : "사용"} 기록 수정`}
+                          onClick={() => onEventAmountEdit(event)}
+                        >
+                          수정
+                        </button>
+                      ) : null}
+                    </div>
                     {event.note ? <small>{event.note}</small> : null}
                   </li>
                 ))}
