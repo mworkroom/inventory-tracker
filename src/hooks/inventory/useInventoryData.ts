@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction
@@ -26,75 +27,92 @@ export function useInventoryData(
   const [purchases, setPurchases] = useState<InventoryPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(
-    async (silent = false) => {
-      if (!supabase) return;
-      if (!silent) setLoading(true);
-      setError(null);
+    (silent = false) => {
+      if (!supabase) return Promise.resolve();
+      if (refreshInFlight.current) return refreshInFlight.current;
 
-      const [
-        productsResult,
-        eventsResult,
-        cyclesResult,
-        storesResult,
-        purchasesResult
-      ] = await Promise.all([
-        supabase
-          .from("inventory_products")
-          .select("*")
-          .eq("workspace_id", WORKSPACE_ID)
-          .eq("is_archived", false)
-          .order("name", { ascending: true }),
-        supabase
-          .from("inventory_events")
-          .select("*")
-          .eq("workspace_id", WORKSPACE_ID)
-          .order("occurred_on", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(2000),
-        supabase
-          .from("inventory_usage_cycles")
-          .select("*")
-          .eq("workspace_id", WORKSPACE_ID)
-          .order("finished_on", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(1000),
-        supabase
-          .from("inventory_stores")
-          .select("*")
-          .eq("workspace_id", WORKSPACE_ID)
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true }),
-        supabase
-          .from("inventory_purchases")
-          .select("*")
-          .eq("workspace_id", WORKSPACE_ID)
-          .order("purchased_on", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(5000)
-      ]);
+      const request = (async () => {
+        if (!silent) setLoading(true);
+        setError(null);
 
-      const firstError =
-        productsResult.error ||
-        eventsResult.error ||
-        cyclesResult.error ||
-        storesResult.error ||
-        purchasesResult.error;
-      if (firstError) {
-        setError(readableError(firstError));
-        setLoading(false);
-        return;
-      }
+        try {
+          const [
+            productsResult,
+            eventsResult,
+            cyclesResult,
+            storesResult,
+            purchasesResult
+          ] = await Promise.all([
+            supabase
+              .from("inventory_products")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .eq("is_archived", false)
+              .order("name", { ascending: true }),
+            supabase
+              .from("inventory_events")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .order("occurred_on", { ascending: false })
+              .order("created_at", { ascending: false })
+              .limit(2000),
+            supabase
+              .from("inventory_usage_cycles")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .order("finished_on", { ascending: false })
+              .order("created_at", { ascending: false })
+              .limit(1000),
+            supabase
+              .from("inventory_stores")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .eq("is_active", true)
+              .order("sort_order", { ascending: true })
+              .order("name", { ascending: true }),
+            supabase
+              .from("inventory_purchases")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .order("purchased_on", { ascending: false })
+              .order("created_at", { ascending: false })
+              .limit(5000)
+          ]);
 
-      setProducts((productsResult.data || []) as InventoryProduct[]);
-      setEvents((eventsResult.data || []) as InventoryEvent[]);
-      setCycles((cyclesResult.data || []) as UsageCycle[]);
-      setStores((storesResult.data || []) as InventoryStore[]);
-      setPurchases((purchasesResult.data || []) as InventoryPurchase[]);
-      setLastLoadedAt(new Date());
-      setLoading(false);
+          const firstError =
+            productsResult.error ||
+            eventsResult.error ||
+            cyclesResult.error ||
+            storesResult.error ||
+            purchasesResult.error;
+          if (firstError) {
+            setError(readableError(firstError));
+            return;
+          }
+
+          setProducts((productsResult.data || []) as InventoryProduct[]);
+          setEvents((eventsResult.data || []) as InventoryEvent[]);
+          setCycles((cyclesResult.data || []) as UsageCycle[]);
+          setStores((storesResult.data || []) as InventoryStore[]);
+          setPurchases((purchasesResult.data || []) as InventoryPurchase[]);
+          setLastLoadedAt(new Date());
+        } catch (caught) {
+          setError(readableError(caught));
+        } finally {
+          setLoading(false);
+        }
+      })();
+
+      refreshInFlight.current = request;
+      void request.finally(() => {
+        if (refreshInFlight.current === request) {
+          refreshInFlight.current = null;
+        }
+      });
+      return request;
     },
     [setError]
   );

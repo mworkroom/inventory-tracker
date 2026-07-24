@@ -17,6 +17,7 @@ node_modules/
 dist/
 coverage/
 backups/
+.supabase-test-project/
 *.tsbuildinfo
 .env
 .env.*

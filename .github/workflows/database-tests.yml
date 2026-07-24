@@ -1,0 +1,48 @@
+name: Database contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/database-tests.yml"
+      - "scripts/prepare-db-test-project.mjs"
+      - "supabase/**"
+  pull_request:
+    paths:
+      - ".github/workflows/database-tests.yml"
+      - "scripts/prepare-db-test-project.mjs"
+      - "supabase/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Initialize isolated local project
+        run: |
+          mkdir .supabase-test-project
+          supabase --workdir .supabase-test-project init
+          node scripts/prepare-db-test-project.mjs .supabase-test-project
+
+      - name: Rebuild blank Inventory Tracker database
+        run: |
+          supabase --workdir .supabase-test-project start -x studio,imgproxy
+          supabase --workdir .supabase-test-project db reset
+
+      - name: Test RPC and RLS contracts
+        run: supabase --workdir .supabase-test-project test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase --workdir .supabase-test-project stop --no-backup
