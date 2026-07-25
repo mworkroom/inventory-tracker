@@ -10,6 +10,7 @@ import {
   calculatePurchaseStats,
   estimateProduct,
   getInventoryAttentionKind,
+  isInventoryAttentionNeeded,
   isRepurchaseDue,
   median,
   parsePurchaseDates,
@@ -234,6 +235,7 @@ test("구매 예상일은 재고·소진 알림과 별도의 재구매 신호로
   assert.equal(estimate.forecastSource, "purchase");
   assert.equal(getInventoryAttentionKind(product, estimate), null);
   assert.equal(isRepurchaseDue(product, stats), true);
+  assert.equal(isInventoryAttentionNeeded(product, estimate, stats), true);
 });
 
 test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분류한다", () => {
@@ -243,7 +245,16 @@ test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분�
     low_stock_threshold: 1
   };
   const quantityEstimate = estimateProduct(quantityProduct, [], [], "2026-07-19");
+  const noPurchaseStats = calculatePurchaseStats("product-1", [], "2026-07-19");
   assert.equal(getInventoryAttentionKind(quantityProduct, quantityEstimate), "quantity");
+  assert.equal(
+    isInventoryAttentionNeeded(
+      quantityProduct,
+      quantityEstimate,
+      noPurchaseStats
+    ),
+    true
+  );
 
   const usageProduct = {
     ...baseProduct,

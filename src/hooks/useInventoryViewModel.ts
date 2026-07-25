@@ -3,6 +3,7 @@ import {
   calculatePurchaseStats,
   estimateProduct,
   getInventoryAttentionKind,
+  isInventoryAttentionNeeded,
   isRepurchaseDue
 } from "../lib/inventory";
 import type {
@@ -81,19 +82,13 @@ export function useInventoryViewModel({
   const counts = useMemo(
     () => ({
       all: inventory.products.length,
-      stock: inventory.products.filter((product) => {
+      attention: inventory.products.filter((product) => {
         const estimate = estimates.get(product.id);
-        return estimate
-          ? getInventoryAttentionKind(product, estimate) !== null
-          : false;
-      }).length,
-      repurchase: inventory.products.filter((product) => {
         const stats = purchaseStats.get(product.id);
-        return stats ? isRepurchaseDue(product, stats) : false;
-      }).length,
-      learning: inventory.products.filter(
-        (product) => estimates.get(product.id)?.isLearning
-      ).length
+        return estimate && stats
+          ? isInventoryAttentionNeeded(product, estimate, stats)
+          : false;
+      }).length
     }),
     [estimates, inventory.products, purchaseStats]
   );
@@ -105,18 +100,13 @@ export function useInventoryViewModel({
         const estimate = estimates.get(product.id);
         const stats = purchaseStats.get(product.id);
         if (
-          filter === "stock" &&
-          (!estimate || getInventoryAttentionKind(product, estimate) === null)
+          filter === "attention" &&
+          (!estimate ||
+            !stats ||
+            !isInventoryAttentionNeeded(product, estimate, stats))
         ) {
           return false;
         }
-        if (
-          filter === "repurchase" &&
-          (!stats || !isRepurchaseDue(product, stats))
-        ) {
-          return false;
-        }
-        if (filter === "learning" && !estimate?.isLearning) return false;
         if (!normalizedQuery) return true;
 
         const storeName = product.preferred_store_id

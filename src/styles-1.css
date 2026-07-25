@@ -319,23 +319,26 @@ button:disabled {
 }
 
 .filter-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--line);
-  box-shadow: var(--shadow);
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-tabs button {
   display: inline-flex;
+  min-width: max-content;
   min-height: 45px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 0;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
@@ -348,6 +351,7 @@ button:disabled {
 }
 
 .filter-tabs button.active {
+  border-color: var(--accent-soft);
   background: var(--accent-soft);
   color: #252525;
 }
@@ -381,7 +385,20 @@ button:disabled {
   font-weight: 800;
 }
 
-.list-heading small {
+.list-heading-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.list-heading-copy > span {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-heading-copy small {
   font-size: var(--font-size-xs);
   font-weight: 700;
 }

@@ -184,6 +184,101 @@
   margin-top: 16px;
 }
 
+.learning-status-dialog {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(17, 24, 39, 0.2);
+}
+
+.learning-status-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.learning-status-summary span {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafb;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+
+.learning-status-summary strong {
+  color: var(--text);
+  font-size: var(--font-size-base);
+}
+
+.learning-status-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learning-status-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.learning-status-list li > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.learning-status-list strong {
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.learning-status-list span,
+.learning-status-list small {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.learning-status-list small {
+  text-align: right;
+}
+
+.learning-status-empty {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 24px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.learning-status-empty strong {
+  color: var(--text);
+}
+
 @media (max-width: 560px) {
   .product-management-action,
   .archived-products-list li {
@@ -193,5 +288,23 @@
   .product-management-action button,
   .archived-restore-button {
     width: 100%;
+  }
+
+  .learning-status-dialog {
+    width: 100%;
+    max-height: calc(100vh - 12px);
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .learning-status-list li {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-status-list small {
+    text-align: left;
   }
 }

@@ -8,9 +8,7 @@ interface FilterTabsProps {
 
 const FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "all", label: "전체" },
-  { value: "stock", label: "재고 확인" },
-  { value: "repurchase", label: "재구매" },
-  { value: "learning", label: "학습 중" }
+  { value: "attention", label: "확인 필요" }
 ];
 
 export function FilterTabs({ value, counts, onChange }: FilterTabsProps) {

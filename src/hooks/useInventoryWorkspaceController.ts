@@ -57,6 +57,7 @@ export function useInventoryWorkspaceController(userId: string) {
     useState<UsageCycleState>(null);
   const [eventCorrectionState, setEventCorrectionState] =
     useState<EventCorrectionState>(null);
+  const [learningStatusOpen, setLearningStatusOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const busy = inventory.busy || lifecycle.busy;
@@ -247,6 +248,8 @@ export function useInventoryWorkspaceController(userId: string) {
     setUsageCycleState,
     eventCorrectionState,
     setEventCorrectionState,
+    learningStatusOpen,
+    setLearningStatusOpen,
     archivedOpen,
     setArchivedOpen,
     toast,

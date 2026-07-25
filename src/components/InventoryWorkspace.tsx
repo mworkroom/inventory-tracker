@@ -6,7 +6,6 @@ import { Header } from "./Header";
 import { InventoryDialogs } from "./InventoryDialogs";
 import { InventoryList } from "./InventoryList";
 import { SearchBar } from "./SearchBar";
-import { ViewModeToggle } from "./ViewModeToggle";
 
 export function InventoryWorkspace({
   userId,
@@ -28,6 +27,7 @@ export function InventoryWorkspace({
         busy={controller.busy}
         archivedCount={controller.lifecycle.archivedProducts.length}
         onAdd={() => controller.setEditorProduct(null)}
+        onOpenLearningStatus={() => controller.setLearningStatusOpen(true)}
         onOpenArchived={controller.openArchived}
         onRefresh={controller.refreshAll}
         onBackup={controller.backup}
@@ -44,10 +44,6 @@ export function InventoryWorkspace({
           counts={view.counts}
           onChange={controller.setFilter}
         />
-        <ViewModeToggle
-          value={controller.viewMode}
-          onChange={controller.setViewMode}
-        />
       </section>
 
       {controller.inventory.error ? (
@@ -63,7 +59,7 @@ export function InventoryWorkspace({
       ) : null}
 
       <InventoryList controller={controller} view={view} />
-      <InventoryDialogs controller={controller} />
+      <InventoryDialogs controller={controller} view={view} />
 
       {controller.toast ? (
         <div className="toast" role="status">

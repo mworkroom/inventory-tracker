@@ -1,18 +1,22 @@
 import type { InventoryWorkspaceController } from "../hooks/useInventoryWorkspaceController";
+import type { InventoryViewModel } from "../hooks/useInventoryViewModel";
 import { ActionDialog } from "./ActionDialog";
 import { ActiveUsageDialog } from "./ActiveUsageDialog";
 import { ArchivedProductsDialog } from "./ArchivedProductsDialog";
 import { EventAmountDialog } from "./EventAmountDialog";
+import { LearningStatusDialog } from "./LearningStatusDialog";
 import { ProductEditor } from "./ProductEditor";
 import { PurchaseDialog } from "./PurchaseDialog";
 import { UsageCycleDialog } from "./UsageCycleDialog";
 
 interface InventoryDialogsProps {
   controller: InventoryWorkspaceController;
+  view: InventoryViewModel;
 }
 
 export function InventoryDialogs({
-  controller
+  controller,
+  view
 }: InventoryDialogsProps) {
   const { inventory, lifecycle, busy } = controller;
 
@@ -104,6 +108,14 @@ export function InventoryDialogs({
           error={lifecycle.error}
           onClose={() => controller.setArchivedOpen(false)}
           onRestore={controller.restoreArchivedProduct}
+        />
+      ) : null}
+
+      {controller.learningStatusOpen ? (
+        <LearningStatusDialog
+          products={inventory.products}
+          view={view}
+          onClose={() => controller.setLearningStatusOpen(false)}
         />
       ) : null}
     </>

@@ -1,12 +1,14 @@
+import { useState } from "react";
 import type { InventoryWorkspaceController } from "../hooks/useInventoryWorkspaceController";
 import type { InventoryViewModel } from "../hooks/useInventoryViewModel";
 import {
   calculatePurchaseStats,
   estimateProduct,
-  getInventoryAttentionKind,
-  isRepurchaseDue
+  isInventoryAttentionNeeded
 } from "../lib/inventory";
 import type { InventoryProduct } from "../types";
+import { GroupByMenu } from "./GroupByMenu";
+import { ChevronIcon } from "./Icons";
 import { ProductCard } from "./ProductCard";
 
 interface InventoryListProps {
@@ -19,6 +21,9 @@ export function InventoryList({
   view
 }: InventoryListProps) {
   const { inventory, viewMode } = controller;
+  const [groupOpenOverrides, setGroupOpenOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   function renderProductCard(product: InventoryProduct) {
     return (
@@ -91,20 +96,26 @@ export function InventoryList({
   return (
     <>
       <div className="list-heading">
-        <span>
-          {viewMode === "store"
-            ? `구매처 ${view.storeGroups.length}곳 · 제품 ${view.visibleProducts.length}개`
-            : `카테고리 ${view.categoryGroups.length}개 · 제품 ${view.visibleProducts.length}개`}
-        </span>
-        {inventory.lastLoadedAt ? (
-          <small>
-            {inventory.lastLoadedAt.toLocaleTimeString("ko-KR", {
-              hour: "2-digit",
-              minute: "2-digit"
-            })}
-            에 확인
-          </small>
-        ) : null}
+        <div className="list-heading-copy">
+          <span>
+            {viewMode === "store"
+              ? `구매처 ${view.storeGroups.length}곳 · 제품 ${view.visibleProducts.length}개`
+              : `카테고리 ${view.categoryGroups.length}개 · 제품 ${view.visibleProducts.length}개`}
+          </span>
+          {inventory.lastLoadedAt ? (
+            <small>
+              {inventory.lastLoadedAt.toLocaleTimeString("ko-KR", {
+                hour: "2-digit",
+                minute: "2-digit"
+              })}
+              에 확인
+            </small>
+          ) : null}
+        </div>
+        <GroupByMenu
+          value={viewMode}
+          onChange={controller.setViewMode}
+        />
       </div>
 
       {inventory.loading ? (
@@ -123,36 +134,54 @@ export function InventoryList({
           }
         >
           {view.activeGroups.map((group) => {
-            const stockAttentionCount = group.products.filter((product) => {
+            const attentionCount = group.products.filter((product) => {
               const estimate = view.estimates.get(product.id);
-              return estimate
-                ? getInventoryAttentionKind(product, estimate) !== null
+              const stats = view.purchaseStats.get(product.id);
+              return estimate && stats
+                ? isInventoryAttentionNeeded(product, estimate, stats)
                 : false;
             }).length;
-            const repurchaseDueCount = group.products.filter((product) => {
-              const stats = view.purchaseStats.get(product.id);
-              return stats ? isRepurchaseDue(product, stats) : false;
-            }).length;
+            const groupStateKey = `${viewMode}:${group.key}`;
+            const hasExpandedProduct = group.products.some(
+              (product) => product.id === controller.expandedId
+            );
+            const shouldOpenByDefault =
+              controller.filter === "attention" || attentionCount > 0;
+            const isGroupOpen =
+              Boolean(controller.query.trim()) ||
+              hasExpandedProduct ||
+              (groupOpenOverrides[groupStateKey] ?? shouldOpenByDefault);
 
             return (
               <section key={group.key} className="store-group">
-                <header className="store-group-heading">
-                  <div>
-                    <strong>{group.name}</strong>
-                    <span>{group.products.length}개</span>
+                <h2 className="store-group-heading">
+                  <button
+                    type="button"
+                    aria-expanded={isGroupOpen}
+                    onClick={() => {
+                      if (isGroupOpen && hasExpandedProduct) {
+                        controller.setExpandedId(null);
+                      }
+                      setGroupOpenOverrides((current) => ({
+                        ...current,
+                        [groupStateKey]: !isGroupOpen
+                      }));
+                    }}
+                  >
+                    <span className="store-group-label">
+                      <strong>{group.name}</strong>
+                      <span>
+                        {group.products.length}개 · 확인 {attentionCount}
+                      </span>
+                    </span>
+                    <ChevronIcon />
+                  </button>
+                </h2>
+                {isGroupOpen ? (
+                  <div className="product-list">
+                    {group.products.map(renderProductCard)}
                   </div>
-                  <small>
-                    {stockAttentionCount > 0
-                      ? `재고·소진 확인 ${stockAttentionCount}`
-                      : "재고·소진 확인 없음"}
-                    {repurchaseDueCount > 0
-                      ? ` · 재구매 시기 ${repurchaseDueCount}`
-                      : ""}
-                  </small>
-                </header>
-                <div className="product-list">
-                  {group.products.map(renderProductCard)}
-                </div>
+                ) : null}
               </section>
             );
           })}

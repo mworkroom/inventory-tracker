@@ -6,6 +6,7 @@ interface HeaderProps {
   busy: boolean;
   archivedCount: number;
   onAdd: () => void;
+  onOpenLearningStatus: () => void;
   onOpenArchived: () => void;
   onRefresh: () => void;
   onBackup: () => void;
@@ -17,6 +18,7 @@ export function Header({
   busy,
   archivedCount,
   onAdd,
+  onOpenLearningStatus,
   onOpenArchived,
   onRefresh,
   onBackup,
@@ -51,6 +53,12 @@ export function Header({
             <p className="topbar-menu-account">
               <strong>{email || "확인할 수 없음"}</strong>
             </p>
+            <button
+              type="button"
+              onClick={() => runAndClose(onOpenLearningStatus)}
+            >
+              학습 현황
+            </button>
             <button
               type="button"
               disabled={busy}

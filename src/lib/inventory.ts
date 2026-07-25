@@ -119,6 +119,17 @@ export function isRepurchaseDue(
   );
 }
 
+export function isInventoryAttentionNeeded(
+  product: InventoryProduct,
+  estimate: ProductEstimate,
+  purchaseStats: PurchaseStats
+): boolean {
+  return (
+    getInventoryAttentionKind(product, estimate) !== null ||
+    isRepurchaseDue(product, purchaseStats)
+  );
+}
+
 function estimateCycleProduct(
   product: InventoryProduct,
   cycles: UsageCycle[],
