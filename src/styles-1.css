@@ -479,35 +479,6 @@ button:disabled {
   flex: 1;
 }
 
-.summary-status {
-  flex: 0 0 auto;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-size: var(--font-size-xs);
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.summary-status.urgent {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.summary-status.repurchase {
-  background: #fff4df;
-  color: #8a570c;
-}
-
-.summary-status.okay {
-  background: var(--success-soft);
-  color: var(--success);
-}
-
-.summary-status.unknown {
-  background: #eef0f2;
-  color: #616b76;
-}
-
 .product-summary-copy strong {
   overflow: hidden;
   font-size: var(--font-size-lg);

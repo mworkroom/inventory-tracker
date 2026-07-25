@@ -142,7 +142,6 @@ export function ProductCard({
         <span className="product-summary-copy">
           <span className="product-summary-name-row">
             <strong>{product.name}</strong>
-            <span className={`summary-status ${statusClass}`}>{statusLabel}</span>
           </span>
           <span className="product-summary-meta">
             {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
