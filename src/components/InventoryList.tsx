@@ -42,7 +42,7 @@ export function InventoryList({
         }
         purchaseStats={
           view.purchaseStats.get(product.id) ||
-          calculatePurchaseStats(product.id, [])
+          calculatePurchaseStats(product.id, [], [])
         }
         events={inventory.events}
         cycles={inventory.cycles}
@@ -62,17 +62,10 @@ export function InventoryList({
           controller.setActiveUsageProduct(product)
         }
         onEdit={() => controller.setEditorProduct(product)}
-        onPurchaseAdd={() =>
+        onPurchaseHistoryAdd={() =>
           controller.setPurchaseState({
             product,
-            mode: "single",
-            purchase: null
-          })
-        }
-        onPurchaseBulk={() =>
-          controller.setPurchaseState({
-            product,
-            mode: "bulk",
+            mode: "history",
             purchase: null
           })
         }
@@ -102,15 +95,6 @@ export function InventoryList({
               ? `구매처 ${view.storeGroups.length}곳 · 제품 ${view.visibleProducts.length}개`
               : `카테고리 ${view.categoryGroups.length}개 · 제품 ${view.visibleProducts.length}개`}
           </span>
-          {inventory.lastLoadedAt ? (
-            <small>
-              {inventory.lastLoadedAt.toLocaleTimeString("ko-KR", {
-                hour: "2-digit",
-                minute: "2-digit"
-              })}
-              에 확인
-            </small>
-          ) : null}
         </div>
         <GroupByMenu
           value={viewMode}

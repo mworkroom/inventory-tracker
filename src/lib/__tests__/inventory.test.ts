@@ -75,6 +75,17 @@ function useEvent(date: string, amount = 1): InventoryEvent {
   };
 }
 
+function intakeEvent(date: string, amount = 1): InventoryEvent {
+  return {
+    ...useEvent(date, amount),
+    id: `intake-${date}`,
+    event_type: "intake",
+    quantity_delta: amount,
+    quantity_before: 0,
+    quantity_after: amount
+  };
+}
+
 function purchase(
   date: string,
   overrides: Partial<InventoryPurchase> = {}
@@ -168,7 +179,12 @@ test("사용 기록이 없으면 과거 구매 간격을 임시 예상으로 사
     purchase("2025-02-11"),
     purchase("2025-07-06")
   ];
-  const stats = calculatePurchaseStats("product-1", purchases, "2025-07-20");
+  const stats = calculatePurchaseStats(
+    "product-1",
+    purchases,
+    [],
+    "2025-07-20"
+  );
   const estimate = estimateProduct(
     { ...baseProduct, current_quantity: 0, stock_initialized: false, alert_days: 130 },
     [],
@@ -188,8 +204,12 @@ test("중앙값은 튀는 사용 기록 하나의 영향을 줄인다", () => {
 
 test("과거 구매일의 최근 간격 중앙값으로 다음 구매일을 계산한다", () => {
   const purchases = [purchase("2024-01-10"), purchase("2024-05-18"), purchase("2024-10-02"), purchase("2025-02-11"), purchase("2025-07-06")];
-  const stats = calculatePurchaseStats("product-1", purchases, "2025-07-20");
-  assert.equal(stats.purchaseCount, 5);
+  const stats = calculatePurchaseStats(
+    "product-1",
+    purchases,
+    [],
+    "2025-07-20"
+  );
   assert.equal(stats.purchaseDateCount, 5);
   assert.equal(stats.medianIntervalDays, 134.5);
   assert.equal(stats.nextPurchaseDate, "2025-11-18");
@@ -197,10 +217,31 @@ test("과거 구매일의 최근 간격 중앙값으로 다음 구매일을 계�
 });
 
 test("같은 날 여러 번 산 기록은 구매 간격 날짜 하나로 계산한다", () => {
-  const stats = calculatePurchaseStats("product-1", [purchase("2025-01-01"), purchase("2025-01-01", { id: "same-day-2" }), purchase("2025-02-01")], "2025-02-02");
-  assert.equal(stats.purchaseCount, 3);
+  const stats = calculatePurchaseStats(
+    "product-1",
+    [
+      purchase("2025-01-01"),
+      purchase("2025-01-01", { id: "same-day-2" }),
+      purchase("2025-02-01")
+    ],
+    [],
+    "2025-02-02"
+  );
   assert.equal(stats.purchaseDateCount, 2);
   assert.equal(stats.medianIntervalDays, 31);
+});
+
+test("앞으로의 입고일을 재구매 간격에 포함하고 같은 날 과거 구매일과 중복 계산하지 않는다", () => {
+  const stats = calculatePurchaseStats(
+    "product-1",
+    [purchase("2025-01-01"), purchase("2025-02-01")],
+    [intakeEvent("2025-02-01"), intakeEvent("2025-03-01")],
+    "2025-03-02"
+  );
+  assert.equal(stats.purchaseDateCount, 3);
+  assert.equal(stats.medianIntervalDays, 29.5);
+  assert.equal(stats.lastPurchasedOn, "2025-03-01");
+  assert.equal(stats.nextPurchaseDate, "2025-03-31");
 });
 
 test("과거 구매일 붙여넣기는 점·하이픈·한글 날짜를 정규화하고 중복을 제거한다", () => {
@@ -228,6 +269,7 @@ test("구매 예상일은 재고·소진 알림과 별도의 재구매 신호로
       purchase("2025-02-11"),
       purchase("2025-07-06")
     ],
+    [],
     "2025-07-20"
   );
   const estimate = estimateProduct(product, [], [], "2025-07-20", stats);
@@ -245,7 +287,12 @@ test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분�
     low_stock_threshold: 1
   };
   const quantityEstimate = estimateProduct(quantityProduct, [], [], "2026-07-19");
-  const noPurchaseStats = calculatePurchaseStats("product-1", [], "2026-07-19");
+  const noPurchaseStats = calculatePurchaseStats(
+    "product-1",
+    [],
+    [],
+    "2026-07-19"
+  );
   assert.equal(getInventoryAttentionKind(quantityProduct, quantityEstimate), "quantity");
   assert.equal(
     isInventoryAttentionNeeded(

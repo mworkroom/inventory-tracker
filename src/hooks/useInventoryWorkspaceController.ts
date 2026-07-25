@@ -12,7 +12,7 @@ import type {
   InventoryPurchase,
   InventoryViewMode,
   ProductDraft,
-  PurchaseBulkDraft,
+  PurchaseHistoryDraft,
   PurchaseDraft,
   UsageCycle,
   UsageCycleDraft
@@ -101,28 +101,27 @@ export function useInventoryWorkspaceController(userId: string) {
     );
   }
 
-  async function savePurchase(draft: PurchaseDraft) {
-    if (!purchaseState || purchaseState.mode === "bulk") return;
-    if (purchaseState.mode === "edit" && purchaseState.purchase) {
-      await inventory.updatePurchase(purchaseState.purchase, draft);
-      showToast("구매 기록을 수정했습니다.");
-    } else {
-      await inventory.createPurchase(purchaseState.product, draft);
-      showToast("구매 기록을 저장했습니다.");
-    }
+  async function savePurchaseEdit(draft: PurchaseDraft) {
+    if (
+      !purchaseState ||
+      purchaseState.mode !== "edit" ||
+      !purchaseState.purchase
+    ) return;
+    await inventory.updatePurchase(purchaseState.purchase, draft);
+    showToast("과거 구매일을 수정했습니다.");
     setExpandedId(purchaseState.product.id);
     setPurchaseState(null);
   }
 
-  async function savePurchaseBatch(draft: PurchaseBulkDraft) {
-    if (!purchaseState || purchaseState.mode !== "bulk") return;
-    const count = await inventory.createPurchaseBatch(
+  async function savePurchaseHistory(draft: PurchaseHistoryDraft) {
+    if (!purchaseState || purchaseState.mode !== "history") return;
+    const count = await inventory.createPurchaseHistory(
       purchaseState.product,
       draft
     );
     setExpandedId(purchaseState.product.id);
     setPurchaseState(null);
-    showToast(`과거 구매 기록 ${count}건을 저장했습니다.`);
+    showToast(`과거 구매일 ${count}개를 저장했습니다.`);
   }
 
   async function saveUsageCycle(draft: UsageCycleDraft) {
@@ -170,7 +169,7 @@ export function useInventoryWorkspaceController(userId: string) {
     await inventory.deletePurchase(purchaseState.purchase);
     setExpandedId(productId);
     setPurchaseState(null);
-    showToast("구매 기록을 삭제했습니다.");
+    showToast("과거 구매일을 삭제했습니다.");
   }
 
   async function archiveEditedProduct() {
@@ -258,8 +257,8 @@ export function useInventoryWorkspaceController(userId: string) {
     openArchived,
     saveProduct,
     saveAction,
-    savePurchase,
-    savePurchaseBatch,
+    savePurchaseEdit,
+    savePurchaseHistory,
     saveUsageCycle,
     saveActiveUsage,
     saveEventAmount,

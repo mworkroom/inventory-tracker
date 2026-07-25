@@ -10,12 +10,12 @@ import type {
   InventoryProduct,
   InventoryPurchase,
   InventoryStore,
-  PurchaseBulkDraft,
+  PurchaseHistoryDraft,
   PurchaseDraft
 } from "../types";
 import { CloseIcon } from "./Icons";
 
-export type PurchaseDialogMode = "single" | "bulk" | "edit";
+export type PurchaseDialogMode = "history" | "edit";
 type CommonPurchaseField = "storeId" | "packageCount" | "packageSize" | "packageUnit";
 
 interface PurchaseDialogProps {
@@ -25,8 +25,8 @@ interface PurchaseDialogProps {
   mode: PurchaseDialogMode;
   busy: boolean;
   onClose: () => void;
-  onSubmitSingle: (draft: PurchaseDraft) => Promise<void>;
-  onSubmitBulk: (draft: PurchaseBulkDraft) => Promise<void>;
+  onSubmitEdit: (draft: PurchaseDraft) => Promise<void>;
+  onSubmitHistory: (draft: PurchaseHistoryDraft) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
 }
 
@@ -37,22 +37,22 @@ export function PurchaseDialog({
   mode,
   busy,
   onClose,
-  onSubmitSingle,
-  onSubmitBulk,
+  onSubmitEdit,
+  onSubmitHistory,
   onDelete
 }: PurchaseDialogProps) {
   const [draft, setDraft] = useState<PurchaseDraft>(() =>
     makePurchaseDraft(product, stores, purchase)
   );
-  const [bulkDraft, setBulkDraft] = useState<PurchaseBulkDraft>(() =>
-    makeBulkDraft(product, stores)
+  const [historyDraft, setHistoryDraft] = useState<PurchaseHistoryDraft>(() =>
+    makeHistoryDraft()
   );
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
     setDraft(makePurchaseDraft(product, stores, purchase));
-    setBulkDraft(makeBulkDraft(product, stores));
+    setHistoryDraft(makeHistoryDraft());
     setFormError(null);
     setDeleteArmed(false);
   }, [mode, product, purchase, stores]);
@@ -65,27 +65,27 @@ export function PurchaseDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [busy, onClose]);
 
-  const bulkDateCount = useMemo(() => {
-    if (!bulkDraft.datesText.trim()) return 0;
+  const historyDateCount = useMemo(() => {
+    if (!historyDraft.datesText.trim()) return 0;
     try {
-      return parsePurchaseDates(bulkDraft.datesText).length;
+      return parsePurchaseDates(historyDraft.datesText).length;
     } catch {
       return 0;
     }
-  }, [bulkDraft.datesText]);
+  }, [historyDraft.datesText]);
 
   function updateDraft<K extends keyof PurchaseDraft>(key: K, value: PurchaseDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function updateBulkDraft<K extends keyof PurchaseBulkDraft>(
+  function updateHistoryDraft<K extends keyof PurchaseHistoryDraft>(
     key: K,
-    value: PurchaseBulkDraft[K]
+    value: PurchaseHistoryDraft[K]
   ) {
-    setBulkDraft((current) => ({ ...current, [key]: value }));
+    setHistoryDraft((current) => ({ ...current, [key]: value }));
   }
 
-  async function submitSingle(event: React.FormEvent<HTMLFormElement>) {
+  async function submitEdit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     const error = validateCommonPurchaseFields(draft);
@@ -95,26 +95,21 @@ export function PurchaseDialog({
     }
 
     try {
-      await onSubmitSingle(draft);
+      await onSubmitEdit(draft);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "구매 기록을 저장하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 수정하지 못했습니다.");
     }
   }
 
-  async function submitBulk(event: React.FormEvent<HTMLFormElement>) {
+  async function submitHistory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
-    const error = validateCommonPurchaseFields(bulkDraft);
-    if (error) {
-      setFormError(error);
-      return;
-    }
 
     try {
-      parsePurchaseDates(bulkDraft.datesText);
-      await onSubmitBulk(bulkDraft);
+      parsePurchaseDates(historyDraft.datesText);
+      await onSubmitHistory(historyDraft);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "과거 구매 기록을 저장하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 저장하지 못했습니다.");
     }
   }
 
@@ -129,18 +124,14 @@ export function PurchaseDialog({
     try {
       await onDelete();
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "구매 기록을 삭제하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 삭제하지 못했습니다.");
     }
   }
 
-  const heading =
-    mode === "bulk" ? "과거 구매 기록" : mode === "edit" ? "구매 기록 수정" : "구매 기록";
-  const description =
-    mode === "bulk"
-      ? "같은 조건으로 샀던 날짜를 여러 줄로 한꺼번에 저장합니다."
-      : mode === "edit"
-        ? "구매처, 수량, 가격과 날짜를 바로잡습니다."
-        : "언제 어디서 샀는지 남깁니다. 현재 재고는 바뀌지 않습니다.";
+  const heading = mode === "history" ? "과거 구매일 추가" : "과거 구매일 수정";
+  const description = mode === "history"
+    ? "현재 재고와 별도로 참고할 과거 구매일을 하나 또는 여러 개 입력합니다."
+    : "기존에 입력한 날짜와 상세 정보를 바로잡습니다.";
 
   return (
     <div
@@ -173,40 +164,27 @@ export function PurchaseDialog({
           </button>
         </div>
 
-        <div className="purchase-dialog-callout">
-          <strong>구매 기록과 입고는 따로입니다.</strong>
-          <span>과거 주문을 입력해도 현재 재고가 늘어나지 않습니다.</span>
-        </div>
+        {mode === "history" ? (
+          <div className="purchase-dialog-callout">
+            <strong>현재 재고는 바뀌지 않습니다.</strong>
+            <span>앞으로 물건이 들어오면 입고만 기록하면 재고와 재구매 간격에 함께 반영됩니다.</span>
+          </div>
+        ) : null}
 
-        {mode === "bulk" ? (
-          <form className="action-form" onSubmit={(event) => void submitBulk(event)}>
+        {mode === "history" ? (
+          <form className="action-form" onSubmit={(event) => void submitHistory(event)}>
             <label>
-              <span className="field-label">구매 날짜</span>
+              <span className="field-label">과거 구매일</span>
               <textarea
                 autoFocus
-                value={bulkDraft.datesText}
+                value={historyDraft.datesText}
                 placeholder={"2024-02-10\n2024. 6. 21.\n2024년 11월 3일"}
-                onChange={(event) => updateBulkDraft("datesText", event.target.value)}
+                onChange={(event) => updateHistoryDraft("datesText", event.target.value)}
               />
               <span className="field-hint">
-                한 줄에 하나씩 입력합니다. {bulkDateCount > 0 ? `${bulkDateCount}개 날짜를 찾았습니다.` : ""}
+                한 줄에 하나씩 입력합니다. 한 날짜만 입력해도 됩니다.{" "}
+                {historyDateCount > 0 ? `${historyDateCount}개 날짜를 찾았습니다.` : ""}
               </span>
-            </label>
-
-            <PurchaseCommonFields
-              product={product}
-              stores={stores}
-              values={bulkDraft}
-              onChange={(key, value) => updateBulkDraft(key, value)}
-            />
-
-            <label>
-              <span className="field-label">공통 메모 · 선택</span>
-              <textarea
-                value={bulkDraft.note}
-                placeholder="예: 쿠팡 과거 주문 내역에서 입력"
-                onChange={(event) => updateBulkDraft("note", event.target.value)}
-              />
             </label>
 
             {formError ? <p className="form-error">{formError}</p> : null}
@@ -216,12 +194,12 @@ export function PurchaseDialog({
                 취소
               </button>
               <button type="submit" className="primary-button" disabled={busy}>
-                {busy ? "저장 중…" : `${bulkDateCount || "여러"}건 저장`}
+                {busy ? "저장 중…" : `${historyDateCount || "여러"}개 저장`}
               </button>
             </div>
           </form>
         ) : (
-          <form className="action-form" onSubmit={(event) => void submitSingle(event)}>
+          <form className="action-form" onSubmit={(event) => void submitEdit(event)}>
             <label>
               <span className="field-label">구매일</span>
               <input
@@ -307,7 +285,7 @@ export function PurchaseDialog({
                 취소
               </button>
               <button type="submit" className="primary-button" disabled={busy}>
-                {busy ? "저장 중…" : mode === "edit" ? "수정 저장" : "구매 기록"}
+                {busy ? "저장 중…" : "수정 저장"}
               </button>
             </div>
           </form>
@@ -386,7 +364,7 @@ function PurchaseCommonFields({
 }
 
 function validateCommonPurchaseFields(
-  values: PurchaseDraft | PurchaseBulkDraft
+  values: PurchaseDraft
 ): string | null {
   if (!values.storeId) return "구매처를 선택해주세요.";
   const packageCount = Number(values.packageCount);
@@ -399,7 +377,7 @@ function validateCommonPurchaseFields(
   if (hasSize !== hasUnit) return "제품 용량과 용량 단위를 함께 입력해주세요.";
   if (hasSize && Number(values.packageSize) <= 0) return "제품 용량은 0보다 커야 합니다.";
 
-  if ("purchasedOn" in values && !values.purchasedOn) {
+  if (!values.purchasedOn) {
     return "구매일을 입력해주세요.";
   }
 
@@ -432,20 +410,9 @@ function makePurchaseDraft(
   };
 }
 
-function makeBulkDraft(
-  product: InventoryProduct,
-  stores: InventoryStore[]
-): PurchaseBulkDraft {
+function makeHistoryDraft(): PurchaseHistoryDraft {
   return {
-    datesText: "",
-    storeId: product.preferred_store_id || stores[0]?.id || "",
-    packageCount: "1",
-    packageSize:
-      product.package_size === null || product.package_size === undefined
-        ? ""
-        : String(product.package_size),
-    packageUnit: product.capacity_unit || "",
-    note: ""
+    datesText: ""
   };
 }
 

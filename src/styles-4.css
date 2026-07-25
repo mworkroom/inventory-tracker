@@ -146,35 +146,21 @@
   transform: rotate(180deg);
 }
 
-.purchase-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  margin-top: 8px;
-}
-
-.purchase-actions button {
+.historical-purchase-action {
+  width: 100%;
   min-height: 44px;
+  margin-top: 8px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid #c9bbeb;
   border-radius: var(--radius);
-  background: var(--panel);
+  background: #f3f0fb;
+  color: #6951a5;
   cursor: pointer;
   font-size: var(--font-size-sm);
   font-weight: 900;
 }
 
-.purchase-actions button:hover {
-  background: #f7f9fa;
-}
-
-.purchase-actions button.purchase-action-main {
-  border-color: #c9bbeb;
-  background: #f3f0fb;
-  color: #6951a5;
-}
-
-.purchase-actions button.purchase-action-main:hover {
+.historical-purchase-action:hover {
   background: #ebe5f8;
 }
 
@@ -226,23 +212,10 @@
   font-weight: 750;
 }
 
-.purchase-history-list strong {
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
-}
-
-.purchase-history-list small,
-.purchase-history-list em {
+.purchase-history-list small {
   color: #737d89;
   font-size: var(--font-size-xs);
-  font-style: normal;
   line-height: 1.4;
-}
-
-.purchase-history-list em {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .purchase-dialog {
@@ -328,7 +301,6 @@
 }
 
 @media (max-width: 390px) {
-  .purchase-actions,
   .dialog-actions.purchase-edit-actions {
     grid-template-columns: 1fr;
   }

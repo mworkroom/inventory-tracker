@@ -386,9 +386,7 @@ button:disabled {
 }
 
 .list-heading-copy {
-  display: grid;
   min-width: 0;
-  gap: 1px;
 }
 
 .list-heading-copy > span {
@@ -396,11 +394,6 @@ button:disabled {
   color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.list-heading-copy small {
-  font-size: var(--font-size-xs);
-  font-weight: 700;
 }
 
 .product-list,

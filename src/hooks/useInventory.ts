@@ -41,6 +41,7 @@ export function useInventory(userId: string): InventoryState {
   });
   const purchaseMutations = usePurchaseMutations({
     products: data.products,
+    stores: data.stores,
     userId,
     refresh: data.refresh,
     runMutation

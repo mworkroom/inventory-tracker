@@ -26,7 +26,6 @@ export function useInventoryData(
   const [stores, setStores] = useState<InventoryStore[]>([]);
   const [purchases, setPurchases] = useState<InventoryPurchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(
@@ -98,7 +97,6 @@ export function useInventoryData(
           setCycles((cyclesResult.data || []) as UsageCycle[]);
           setStores((storesResult.data || []) as InventoryStore[]);
           setPurchases((purchasesResult.data || []) as InventoryPurchase[]);
-          setLastLoadedAt(new Date());
         } catch (caught) {
           setError(readableError(caught));
         } finally {
@@ -141,7 +139,6 @@ export function useInventoryData(
     stores,
     purchases,
     loading,
-    lastLoadedAt,
     refresh
   };
 }

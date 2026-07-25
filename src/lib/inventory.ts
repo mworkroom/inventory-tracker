@@ -73,7 +73,7 @@ export function estimateProduct(
     urgentReason = `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
   } else if (daysUrgent && remainingDays !== null) {
     urgentReason = forecastSource === "purchase"
-      ? `과거 구매 기록 기준 다음 구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
+      ? `과거 구매일과 입고일 기준 다음 재구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
       : `현재 사용 속도라면 약 ${Math.max(0, Math.round(remainingDays))}일 후 재고가 소진됩니다.`;
   }
 
@@ -265,13 +265,22 @@ function estimateDecrementProduct(
 export function calculatePurchaseStats(
   productId: string,
   purchases: InventoryPurchase[],
+  events: InventoryEvent[] = [],
   today = todayIso()
 ): PurchaseStats {
   const productPurchases = purchases.filter(
     (purchase) => purchase.product_id === productId
   );
+  const productIntakes = events.filter(
+    (event) =>
+      event.product_id === productId &&
+      event.event_type === "intake"
+  );
   const uniqueDates = [
-    ...new Set(productPurchases.map((purchase) => purchase.purchased_on))
+    ...new Set([
+      ...productPurchases.map((purchase) => purchase.purchased_on),
+      ...productIntakes.map((event) => event.occurred_on)
+    ])
   ].sort(compareIsoDate);
   const intervals: number[] = [];
 
@@ -289,7 +298,6 @@ export function calculatePurchaseStats(
       : null;
 
   return {
-    purchaseCount: productPurchases.length,
     purchaseDateCount: uniqueDates.length,
     intervalSampleCount: recentIntervals.length,
     medianIntervalDays,

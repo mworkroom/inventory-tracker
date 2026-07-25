@@ -1,7 +1,6 @@
 import {
   eventLabel,
   formatApproxDays,
-  formatCurrency,
   formatDate,
   formatQuantity,
   getInventoryAttentionKind,
@@ -34,8 +33,7 @@ interface ProductCardProps {
   onAction: (action: InventoryAction) => void;
   onActiveUsageEdit: () => void;
   onEdit: () => void;
-  onPurchaseAdd: () => void;
-  onPurchaseBulk: () => void;
+  onPurchaseHistoryAdd: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
   onUsageCycleEdit: (cycle: UsageCycle) => void;
   onEventAmountEdit: (event: InventoryEvent) => void;
@@ -55,8 +53,7 @@ export function ProductCard({
   onAction,
   onActiveUsageEdit,
   onEdit,
-  onPurchaseAdd,
-  onPurchaseBulk,
+  onPurchaseHistoryAdd,
   onPurchaseEdit,
   onUsageCycleEdit,
   onEventAmountEdit
@@ -121,7 +118,7 @@ export function ProductCard({
     : inventoryAttentionKind === "usage" && estimate.remainingDays !== null
       ? `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
       : repurchaseDue && purchaseStats.nextPurchaseDate
-        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)} · 재고량과 별도로 과거 구매 간격을 기준으로 한 알림입니다.`
+        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)} · 과거 구매일과 실제 입고일을 기준으로 한 알림입니다.`
         : stockInitialized
           ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
             ? `현재 사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
@@ -249,33 +246,33 @@ export function ProductCard({
           <section className="forecast-section purchase-forecast-section">
             <div className="forecast-section-heading">
               <div>
-                <h3>구매 기록 기준</h3>
-                <p>재고량과 별도로 J님이 평소 다시 산 시기를 봅니다.</p>
+                <h3>재구매 간격 기준</h3>
+                <p>과거 구매일과 앞으로의 입고일을 함께 봅니다.</p>
               </div>
               <span className={`forecast-status ${repurchaseDue ? "repurchase" : "neutral"}`}>
                 {repurchaseDue
                   ? "재구매 시기"
                   : purchaseStats.nextPurchaseDate
                     ? "예상일 있음"
-                    : "구매 주기 학습 전"}
+                    : "재구매 간격 학습 전"}
               </span>
             </div>
             <dl className="product-info forecast-info">
               <InfoRow
-                label="구매 기록"
+                label="기준 날짜"
                 value={
-                  purchaseStats.purchaseCount > 0
-                    ? `${purchaseStats.purchaseCount}회 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
+                  purchaseStats.purchaseDateCount > 0
+                    ? `${purchaseStats.purchaseDateCount}개 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
                     : "아직 없음"
                 }
               />
               <InfoRow
-                label="평소 구매 간격"
+                label="평소 다시 산 간격"
                 value={
                   purchaseStats.medianIntervalDays === null
                     ? purchaseStats.purchaseDateCount > 0
                       ? "날짜가 2개 이상 필요함"
-                      : "과거 기록을 입력하면 계산"
+                      : "과거 구매일을 입력하거나 입고하면 계산"
                     : `${formatApproxDays(purchaseStats.medianIntervalDays)} · 간격 ${purchaseStats.intervalSampleCount}개 기준`
                 }
               />
@@ -287,7 +284,7 @@ export function ProductCard({
                         purchaseStats.nextPurchaseDate,
                         purchaseStats.daysUntilNextPurchase
                       )
-                    : "구매일 2개 이상부터 계산"
+                    : "과거 구매일·입고일 합계 2개부터 계산"
                 }
               />
             </dl>
@@ -342,20 +339,22 @@ export function ProductCard({
           {isCycle ? (
             <p className="cycle-action-note">
               {stockInitialized
-                ? "입고는 통·병·봉 개수만 늘립니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다."
-                : "첫 입고부터 계산을 시작하거나, 이미 가진 통·병·봉 개수를 먼저 설정할 수 있습니다."}
+                ? "입고하면 통·병·봉 개수가 늘고, 그 날짜가 재구매 간격에도 반영됩니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다."
+                : "첫 입고부터 재고와 재구매 간격 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."}
             </p>
           ) : null}
 
-          <div className="purchase-actions" aria-label={`${product.name} 구매 기록`}>
-            <button type="button" className="purchase-action-main" disabled={busy} onClick={onPurchaseAdd}>
-              구매 기록
-            </button>
-            <button type="button" disabled={busy} onClick={onPurchaseBulk}>
-              과거 기록 한꺼번에
-            </button>
-          </div>
-          <p className="purchase-action-note">구매 기록은 현재 재고를 바꾸지 않습니다.</p>
+          <button
+            type="button"
+            className="historical-purchase-action"
+            disabled={busy}
+            onClick={onPurchaseHistoryAdd}
+          >
+            과거 구매일 추가
+          </button>
+          <p className="purchase-action-note">
+            현재 재고와 무관한 과거 날짜만 보충합니다. 앞으로는 입고만 기록하면 됩니다.
+          </p>
 
           <section className="history-section">
             <div className="section-heading">
@@ -399,8 +398,8 @@ export function ProductCard({
 
           <section className="purchase-history-section">
             <div className="section-heading">
-              <h3>최근 구매 기록</h3>
-              <span>{purchaseStats.purchaseCount}회</span>
+              <h3>입력한 과거 구매일</h3>
+              <span>{purchases.length}개</span>
             </div>
             {recentPurchases.length ? (
               <ul className="purchase-history-list">
@@ -409,24 +408,15 @@ export function ProductCard({
                   return (
                     <li key={purchase.id}>
                       <button type="button" disabled={busy} onClick={() => onPurchaseEdit(purchase)}>
-                        <span>{formatDate(purchase.purchased_on)} · {storeName}</span>
-                        <strong>{formatPurchaseAmount(purchase, product)}</strong>
-                        {purchase.total_price !== null || purchase.shipping_fee !== null ? (
-                          <small>
-                            {purchase.total_price !== null ? `총 ${formatCurrency(purchase.total_price)}` : ""}
-                            {purchase.shipping_fee !== null
-                              ? `${purchase.total_price !== null ? " · " : ""}배송비 ${formatCurrency(purchase.shipping_fee)}`
-                              : ""}
-                          </small>
-                        ) : null}
-                        {purchase.note ? <em>{purchase.note}</em> : null}
+                        <span>{formatDate(purchase.purchased_on)}</span>
+                        {storeName !== "기타" ? <small>{storeName}</small> : null}
                       </button>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="history-empty">아직 구매 기록이 없습니다.</p>
+              <p className="history-empty">입력한 과거 구매일이 없습니다.</p>
             )}
           </section>
 
@@ -498,15 +488,6 @@ function formatActiveMeta(product: InventoryProduct): string {
 
 function formatDecimal(value: number): string {
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
-}
-
-function formatPurchaseAmount(
-  purchase: InventoryPurchase,
-  product: InventoryProduct
-): string {
-  const count = `${formatQuantity(purchase.package_count)}${product.unit_label}`;
-  if (purchase.package_size === null || !purchase.package_unit) return count;
-  return `${count} · ${formatQuantity(purchase.package_size)}${purchase.package_unit}씩`;
 }
 
 function formatPurchaseForecast(

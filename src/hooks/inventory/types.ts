@@ -7,7 +7,7 @@ import type {
   InventoryPurchase,
   InventoryStore,
   ProductDraft,
-  PurchaseBulkDraft,
+  PurchaseHistoryDraft,
   PurchaseDraft,
   UsageCycle,
   UsageCycleDraft
@@ -28,7 +28,6 @@ export interface InventoryState {
   loading: boolean;
   busy: boolean;
   error: string | null;
-  lastLoadedAt: Date | null;
   refresh: InventoryRefresh;
   createProduct: (draft: ProductDraft) => Promise<InventoryProduct>;
   updateProduct: (
@@ -53,13 +52,9 @@ export interface InventoryState {
     draft: UsageCycleDraft
   ) => Promise<UsageCycle>;
   deleteUsageCycle: (cycle: UsageCycle) => Promise<void>;
-  createPurchase: (
+  createPurchaseHistory: (
     product: InventoryProduct,
-    draft: PurchaseDraft
-  ) => Promise<InventoryPurchase>;
-  createPurchaseBatch: (
-    product: InventoryProduct,
-    draft: PurchaseBulkDraft
+    draft: PurchaseHistoryDraft
   ) => Promise<number>;
   updatePurchase: (
     purchase: InventoryPurchase,

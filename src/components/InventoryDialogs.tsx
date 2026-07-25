@@ -59,8 +59,8 @@ export function InventoryDialogs({
           mode={controller.purchaseState.mode}
           busy={busy}
           onClose={() => controller.setPurchaseState(null)}
-          onSubmitSingle={controller.savePurchase}
-          onSubmitBulk={controller.savePurchaseBatch}
+          onSubmitEdit={controller.savePurchaseEdit}
+          onSubmitHistory={controller.savePurchaseHistory}
           onDelete={
             controller.purchaseState.mode === "edit"
               ? controller.deletePurchase

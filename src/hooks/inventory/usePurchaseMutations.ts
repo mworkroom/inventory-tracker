@@ -5,17 +5,16 @@ import { supabase } from "../../lib/supabase";
 import type {
   InventoryProduct,
   InventoryPurchase,
-  PurchaseBulkDraft,
+  InventoryStore,
+  PurchaseHistoryDraft,
   PurchaseDraft
 } from "../../types";
 import type { InventoryRefresh, RunInventoryMutation } from "./types";
-import {
-  buildPurchaseCommonPayload,
-  buildPurchasePayload
-} from "./validation";
+import { buildPurchasePayload } from "./validation";
 
 interface PurchaseMutationOptions {
   products: InventoryProduct[];
+  stores: InventoryStore[];
   userId: string;
   refresh: InventoryRefresh;
   runMutation: RunInventoryMutation;
@@ -23,44 +22,43 @@ interface PurchaseMutationOptions {
 
 export function usePurchaseMutations({
   products,
+  stores,
   userId,
   refresh,
   runMutation
 }: PurchaseMutationOptions) {
-  const createPurchase = useCallback(
-    (product: InventoryProduct, draft: PurchaseDraft) =>
-      runMutation(async () => {
-        if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        const { data, error } = await supabase
-          .from("inventory_purchases")
-          .insert(buildPurchasePayload(product, draft, userId))
-          .select("*")
-          .single();
-        if (error) throw error;
-        await refresh(true);
-        return data as InventoryPurchase;
-      }),
-    [refresh, runMutation, userId]
-  );
-
-  const createPurchaseBatch = useCallback(
-    (product: InventoryProduct, draft: PurchaseBulkDraft) =>
+  const createPurchaseHistory = useCallback(
+    (product: InventoryProduct, draft: PurchaseHistoryDraft) =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
         const dates = parsePurchaseDates(draft.datesText);
-        const common = buildPurchaseCommonPayload(product, draft, userId);
+        const storeId =
+          stores.find((store) => store.name === "기타")?.id ||
+          product.preferred_store_id ||
+          stores[0]?.id;
+        if (!storeId) {
+          throw new Error("과거 구매일을 저장할 기본 구매처가 없습니다.");
+        }
         const rows = dates.map((purchasedOn) => ({
-          ...common,
+          workspace_id: WORKSPACE_ID,
+          product_id: product.id,
+          store_id: storeId,
           purchased_on: purchasedOn,
+          package_count: 1,
+          package_size: null,
+          package_unit: null,
           total_price: null,
-          shipping_fee: null
+          shipping_fee: null,
+          note: null,
+          created_by: userId,
+          updated_by: userId
         }));
         const { error } = await supabase.from("inventory_purchases").insert(rows);
         if (error) throw error;
         await refresh(true);
         return dates.length;
       }),
-    [refresh, runMutation, userId]
+    [refresh, runMutation, stores, userId]
   );
 
   const updatePurchase = useCallback(
@@ -102,8 +100,7 @@ export function usePurchaseMutations({
   );
 
   return {
-    createPurchase,
-    createPurchaseBatch,
+    createPurchaseHistory,
     updatePurchase,
     deletePurchase
   };

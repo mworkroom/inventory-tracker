@@ -46,11 +46,15 @@ export function useInventoryViewModel({
     inventory.products.forEach((product) => {
       result.set(
         product.id,
-        calculatePurchaseStats(product.id, inventory.purchases)
+        calculatePurchaseStats(
+          product.id,
+          inventory.purchases,
+          inventory.events
+        )
       );
     });
     return result;
-  }, [inventory.products, inventory.purchases]);
+  }, [inventory.events, inventory.products, inventory.purchases]);
 
   const estimates = useMemo(() => {
     const result = new Map<string, ProductEstimate>();

@@ -3,7 +3,6 @@ import { todayIso, usageCycleDurationDays } from "../../lib/inventory";
 import type {
   InventoryProduct,
   ProductDraft,
-  PurchaseBulkDraft,
   PurchaseDraft,
   UsageCycleDraft
 } from "../../types";
@@ -25,7 +24,7 @@ export function buildPurchasePayload(
 
 export function buildPurchaseCommonPayload(
   product: InventoryProduct,
-  draft: PurchaseDraft | PurchaseBulkDraft,
+  draft: PurchaseDraft,
   userId: string
 ) {
   if (!draft.storeId) throw new Error("구매처를 선택해주세요.");

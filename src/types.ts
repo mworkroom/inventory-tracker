@@ -138,13 +138,8 @@ export interface PurchaseDraft {
   note: string;
 }
 
-export interface PurchaseBulkDraft {
+export interface PurchaseHistoryDraft {
   datesText: string;
-  storeId: string;
-  packageCount: string;
-  packageSize: string;
-  packageUnit: string;
-  note: string;
 }
 
 export interface ProductEstimate {
@@ -162,7 +157,6 @@ export interface ProductEstimate {
 }
 
 export interface PurchaseStats {
-  purchaseCount: number;
   purchaseDateCount: number;
   intervalSampleCount: number;
   medianIntervalDays: number | null;
