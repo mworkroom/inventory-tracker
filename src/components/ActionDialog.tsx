@@ -177,11 +177,11 @@ export function ActionDialog({
           {action === "stock_check" && stockCheckAmount !== null ? (
             <div className="finish-note">
               <strong>
-                {formatQuantity(stockCheckAmount)}{product.unit_label}을 사용한 것으로 기록합니다.
+                사용량 {formatQuantity(stockCheckAmount)}{product.unit_label}으로 기록합니다.
               </strong>
               <span>
-                현재 재고가 {formatQuantity(product.current_quantity)}{product.unit_label}에서{" "}
-                {formatQuantity(stockCheckTarget)}{product.unit_label}로 줄고 소비 속도 학습에 반영됩니다.
+                현재 재고 {formatQuantity(product.current_quantity)}{product.unit_label} →{" "}
+                {formatQuantity(stockCheckTarget)}{product.unit_label}. 차이는 소비 속도 학습에 반영됩니다.
               </span>
             </div>
           ) : null}
