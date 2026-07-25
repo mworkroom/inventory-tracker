@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 import { WORKSPACE_ID } from "../../config";
-import { todayIso } from "../../lib/inventory";
+import {
+  calculateStockCheckUsage,
+  isStockInitialized,
+  todayIso
+} from "../../lib/inventory";
 import { supabase } from "../../lib/supabase";
 import type {
   ActiveUsageDraft,
@@ -37,15 +41,31 @@ export function useRecordMutations({
     ) =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+        let stockCheckAmount: number | null = null;
+        if (action === "stock_check") {
+          if (product.tracking_mode !== "count") {
+            throw new Error("남은 수량 확인은 쓸 때마다 수량을 줄이는 제품에서만 사용할 수 있습니다.");
+          }
+          if (!isStockInitialized(product)) {
+            throw new Error("먼저 입고하거나 현재 재고를 설정해주세요.");
+          }
+          stockCheckAmount = calculateStockCheckUsage(
+            product.current_quantity,
+            draft.targetQuantity
+          );
+        }
+        const rpcAction = action === "stock_check" ? "use" : action;
         const { data, error } = await supabase.rpc("record_inventory_action", {
           p_product_id: product.id,
-          p_action: action,
+          p_action: rpcAction,
           p_amount:
-            action === "intake" || action === "use"
-              ? action === "intake" && product.tracking_mode === "cycle"
-                ? parseRequiredInteger(draft.amount, "입고 개수")
-                : parseRequiredNumber(draft.amount, "수량")
-              : null,
+            action === "stock_check"
+              ? stockCheckAmount
+              : action === "intake" || action === "use"
+                ? action === "intake" && product.tracking_mode === "cycle"
+                  ? parseRequiredInteger(draft.amount, "입고 개수")
+                  : parseRequiredNumber(draft.amount, "수량")
+                : null,
           p_target_quantity:
             action === "adjustment"
               ? product.tracking_mode === "cycle"
@@ -71,7 +91,7 @@ export function useRecordMutations({
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
         if (product.tracking_mode !== "cycle" || !product.active_opened_on) {
-          throw new Error("현재 사용 중인 개봉·소진 제품만 수정할 수 있습니다.");
+          throw new Error("현재 개봉해 사용 중인 제품만 수정할 수 있습니다.");
         }
         if (!draft.openedOn || draft.openedOn > todayIso()) {
           throw new Error("개봉일은 오늘 또는 과거 날짜로 입력해주세요.");

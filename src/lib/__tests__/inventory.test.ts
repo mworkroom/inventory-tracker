@@ -7,6 +7,7 @@ import type {
   UsageCycle
 } from "../../types";
 import {
+  calculateStockCheckUsage,
   calculatePurchaseStats,
   estimateProduct,
   getInventoryAttentionKind,
@@ -135,7 +136,7 @@ test("개봉 후 지난 기간과 미개봉 1통을 각각 남은 기간에 반�
   assert.equal(estimate.remainingDays, 62 + 160);
 });
 
-test("개수 직접 차감은 최근 사용 간격의 중앙값으로 남은 기간을 계산한다", () => {
+test("쓸 때마다 수량 줄이기는 최근 사용 간격의 중앙값으로 남은 기간을 계산한다", () => {
   const product: InventoryProduct = {
     ...baseProduct,
     tracking_mode: "count",
@@ -148,6 +149,22 @@ test("개수 직접 차감은 최근 사용 간격의 중앙값으로 남은 기
   const estimate = estimateProduct(product, events, [], "2026-07-19");
   assert.equal(estimate.daysPerUnit, 8);
   assert.equal(estimate.remainingDays, 32);
+});
+
+test("남은 수량 확인은 앱 재고와 실제 잔량의 차이를 사용량으로 계산한다", () => {
+  assert.equal(calculateStockCheckUsage(8, "3"), 5);
+  assert.throws(
+    () => calculateStockCheckUsage(8, "9"),
+    /입고 또는 재고 정정/
+  );
+  assert.throws(
+    () => calculateStockCheckUsage(8, "8"),
+    /현재 앱 재고와 같습니다/
+  );
+  assert.throws(
+    () => calculateStockCheckUsage(8, ""),
+    /실제 남은 수량을 입력/
+  );
 });
 
 test("재고 수량 기준과 예상 소진일 기준 모두 구매 필요를 표시한다", () => {

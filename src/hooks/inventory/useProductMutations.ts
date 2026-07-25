@@ -40,10 +40,7 @@ export function useProductMutations({
               : null,
           p_capacity_unit:
             draft.trackingMode === "cycle" ? draft.capacityUnit.trim() : null,
-          p_current_consumer_count:
-            draft.trackingMode === "cycle"
-              ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
-              : 1,
+          p_current_consumer_count: 1,
           p_notes: draft.notes.trim() || null,
           p_preferred_store_id: draft.preferredStoreId || null,
           p_category: normalizeCategory(draft.category)
@@ -74,9 +71,6 @@ export function useProductMutations({
             capacity_unit: isCycle ? draft.capacityUnit.trim() : null,
             low_stock_threshold: parseLowStockThreshold(fixedDraft),
             alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-            current_consumer_count: isCycle
-              ? parseRequiredInteger(draft.currentConsumerCount, "사용 인원")
-              : 1,
             category: normalizeCategory(draft.category),
             preferred_store_id: draft.preferredStoreId || null,
             notes: draft.notes.trim() || null,

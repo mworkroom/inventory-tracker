@@ -123,7 +123,7 @@ export function ProductCard({
           ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
             ? `현재 사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
             : isCycle
-              ? "개봉·소진 기록을 쌓으면 실제 사용 기간을 계산합니다."
+              ? "개봉일과 다 쓴 날 기록을 쌓으면 실제 사용 기간을 계산합니다."
               : "서로 다른 날짜의 사용 기록을 쌓으면 실제 사용 속도를 계산합니다."
           : "첫 입고를 기록하거나 현재 재고를 설정하면 재고 계산을 시작합니다.";
 
@@ -290,7 +290,7 @@ export function ProductCard({
             </dl>
           </section>
 
-          <div className={`quick-actions${isCycle ? " cycle-actions" : ""}`} aria-label={`${product.name} 빠른 기록`}>
+          <div className={`quick-actions ${isCycle ? "cycle-actions" : "count-actions"}`} aria-label={`${product.name} 빠른 기록`}>
             <button type="button" disabled={busy} onClick={() => onAction("intake")}>
               <span aria-hidden="true">＋</span>
               입고
@@ -323,9 +323,18 @@ export function ProductCard({
                 onClick={() => onAction("use")}
               >
                 <span aria-hidden="true">−</span>
-                사용
+                사용 기록
               </button>
             )}
+            {!isCycle ? (
+              <button
+                type="button"
+                disabled={busy || !stockInitialized || product.current_quantity <= 0}
+                onClick={() => onAction("stock_check")}
+              >
+                지금 남은 수량 확인
+              </button>
+            ) : null}
             {isCycle && product.active_opened_on ? (
               <button type="button" disabled={busy} onClick={onActiveUsageEdit}>
                 사용 중 수정
@@ -336,13 +345,15 @@ export function ProductCard({
             </button>
           </div>
 
-          {isCycle ? (
-            <p className="cycle-action-note">
-              {stockInitialized
+          <p className="inventory-action-note">
+            {isCycle
+              ? stockInitialized
                 ? "입고하면 통·병·봉 개수가 늘고, 그 날짜가 재구매 간격에도 반영됩니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다."
-                : "첫 입고부터 재고와 재구매 간격 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."}
-            </p>
-          ) : null}
+                : "첫 입고부터 재고와 재구매 간격 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."
+              : stockInitialized
+                ? "사용량을 알면 사용 기록, 실제 잔량만 알면 지금 남은 수량 확인, 입력 실수는 재고 정정을 사용합니다."
+                : "첫 입고를 기록하거나 지금 가진 수량을 현재 재고로 설정하면 계산을 시작합니다."}
+          </p>
 
           <button
             type="button"
@@ -468,10 +479,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function trackingModeLabel(product: InventoryProduct): string {
   switch (product.tracking_mode) {
     case "cycle":
-      return `개수 재고 + 개봉·소진 (${product.unit_label})`;
+      return `개봉일과 다 쓴 날만 기록 (${product.unit_label})`;
     case "count":
     default:
-      return `개수 직접 차감 (${product.unit_label})`;
+      return `쓸 때마다 수량 줄이기 (${product.unit_label})`;
   }
 }
 

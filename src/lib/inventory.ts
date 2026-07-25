@@ -21,6 +21,29 @@ export function isStockInitialized(product: InventoryProduct): boolean {
   return product.stock_initialized !== false;
 }
 
+export function calculateStockCheckUsage(
+  currentQuantity: number,
+  targetQuantity: string
+): number {
+  if (!targetQuantity.trim()) {
+    throw new Error("실제 남은 수량을 입력해주세요.");
+  }
+  const actualQuantity = Number(targetQuantity);
+  if (!Number.isFinite(actualQuantity)) {
+    throw new Error("실제 남은 수량을 숫자로 입력해주세요.");
+  }
+  if (actualQuantity < 0) {
+    throw new Error("실제 남은 수량은 0 이상이어야 합니다.");
+  }
+  if (actualQuantity > currentQuantity) {
+    throw new Error("앱 재고보다 많다면 입고 또는 재고 정정을 사용해주세요.");
+  }
+  if (actualQuantity === currentQuantity) {
+    throw new Error("입력한 수량이 현재 앱 재고와 같습니다.");
+  }
+  return currentQuantity - actualQuantity;
+}
+
 export function estimateProduct(
   product: InventoryProduct,
   events: InventoryEvent[],
@@ -459,6 +482,8 @@ export function actionPastTense(action: string): string {
       return "소진을";
     case "adjustment":
       return "재고 정정을";
+    case "stock_check":
+      return "남은 수량을 확인해";
     default:
       return "기록을";
   }

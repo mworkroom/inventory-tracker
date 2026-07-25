@@ -34,6 +34,15 @@ export function ActionDialog({
   const content = useMemo(() => getActionContent(action, product), [action, product]);
   const isCycle = product.tracking_mode === "cycle";
   const stockInitialized = isStockInitialized(product);
+  const stockCheckTarget = Number(draft.targetQuantity);
+  const stockCheckAmount =
+    action === "stock_check" &&
+    draft.targetQuantity.trim() !== "" &&
+    Number.isFinite(stockCheckTarget) &&
+    stockCheckTarget >= 0 &&
+    stockCheckTarget < product.current_quantity
+      ? product.current_quantity - stockCheckTarget
+      : null;
 
   useEffect(() => {
     setDraft(makeDraft(product, action));
@@ -128,17 +137,24 @@ export function ActionDialog({
             </label>
           ) : null}
 
-          {action === "adjustment" ? (
+          {action === "adjustment" || action === "stock_check" ? (
             <label>
               <span className="field-label">
-                {isCycle
-                  ? `지금 실제로 보유한 ${product.unit_label} 개수`
-                  : "지금 직접 확인한 실제 재고"}
+                {action === "stock_check"
+                  ? "지금 실제로 남아 있는 수량"
+                  : stockInitialized
+                    ? isCycle
+                      ? `정정할 ${product.unit_label} 개수`
+                      : "정정할 재고 수량"
+                    : isCycle
+                      ? `지금 실제로 보유한 ${product.unit_label} 개수`
+                      : "지금 직접 확인한 실제 재고"}
               </span>
               <div className="input-with-unit">
                 <input
                   type="number"
                   min="0"
+                  max={action === "stock_check" ? product.current_quantity : undefined}
                   step={isCycle ? "1" : "any"}
                   autoFocus
                   value={draft.targetQuantity}
@@ -146,12 +162,28 @@ export function ActionDialog({
                 />
                 <span>{product.unit_label}</span>
               </div>
-              {isCycle ? (
+              {action === "stock_check" ? (
+                <span className="field-hint">
+                  앱 재고보다 많다면 입고 또는 재고 정정을 사용해주세요.
+                </span>
+              ) : isCycle ? (
                 <span className="field-hint">사용 중인 제품도 현재 재고 개수에 포함합니다.</span>
               ) : !stockInitialized ? (
                 <span className="field-hint">이 수량을 기준으로 이후 입고와 사용을 계산합니다.</span>
               ) : null}
             </label>
+          ) : null}
+
+          {action === "stock_check" && stockCheckAmount !== null ? (
+            <div className="finish-note">
+              <strong>
+                {formatQuantity(stockCheckAmount)}{product.unit_label}을 사용한 것으로 기록합니다.
+              </strong>
+              <span>
+                현재 재고가 {formatQuantity(product.current_quantity)}{product.unit_label}에서{" "}
+                {formatQuantity(stockCheckTarget)}{product.unit_label}로 줄고 소비 속도 학습에 반영됩니다.
+              </span>
+            </div>
           ) : null}
 
           {action === "open" ? (
@@ -181,7 +213,9 @@ export function ActionDialog({
           ) : null}
 
           <label>
-            <span className="field-label">기록 날짜</span>
+            <span className="field-label">
+              {action === "stock_check" ? "확인 날짜" : "기록 날짜"}
+            </span>
             <input
               type="date"
               min={action === "finish" ? product.active_opened_on || undefined : undefined}
@@ -253,6 +287,12 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
         description: `사용한 ${product.unit_label}만큼 현재 재고에서 뺍니다.`,
         submitLabel: "사용 기록"
       };
+    case "stock_check":
+      return {
+        title: "지금 남은 수량 확인",
+        description: "실제 잔량을 입력하면 앱 재고와의 차이를 사용량으로 자동 기록합니다.",
+        submitLabel: "남은 수량 반영"
+      };
     case "open":
       return {
         title: "새 제품 개봉",
@@ -271,8 +311,8 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
         title: stockInitialized ? "재고 정정" : "현재 재고 설정",
         description: stockInitialized
           ? isCycle
-            ? "앱 숫자와 실제 보유 통·병·봉 개수가 다를 때 맞춥니다."
-            : "앱 숫자와 실제 재고가 다를 때 맞춥니다."
+            ? "입력 실수로 잘못된 보유 개수만 바로잡습니다. 사용 기간 학습에는 포함되지 않습니다."
+            : "입력 실수로 잘못된 재고 숫자만 바로잡습니다. 소비 속도 학습에는 포함되지 않습니다."
           : "지금 보유한 수량을 기준점으로 저장하고 이후 재고 계산을 시작합니다.",
         submitLabel: stockInitialized ? "재고 맞추기" : "재고 계산 시작"
       };

@@ -121,11 +121,6 @@ export function validateCycleProductDraft(draft: ProductDraft): void {
       "재고 단위에는 통·병·봉처럼 포장 개수를 나타내는 말을 입력해주세요."
     );
   }
-  const consumerCount = parseRequiredInteger(
-    draft.currentConsumerCount,
-    "사용 인원"
-  );
-  if (consumerCount < 1) throw new Error("사용 인원은 1명 이상이어야 합니다.");
 }
 
 export function validateUsageCycleDraft(draft: UsageCycleDraft): {

@@ -101,12 +101,11 @@ export interface ProductDraft {
   alertDays: string;
   packageSize: string;
   capacityUnit: string;
-  currentConsumerCount: string;
   preferredStoreId: string;
   notes: string;
 }
 
-export type InventoryAction = InventoryEventType;
+export type InventoryAction = InventoryEventType | "stock_check";
 
 export interface InventoryActionDraft {
   amount: string;

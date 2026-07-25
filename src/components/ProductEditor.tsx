@@ -63,8 +63,7 @@ export function ProductEditor({
           trackingMode: mode,
           unitLabel: "통",
           packageSize: "",
-          capacityUnit: "ml",
-          currentConsumerCount: "1"
+          capacityUnit: "ml"
         };
       }
 
@@ -73,8 +72,7 @@ export function ProductEditor({
         trackingMode: mode,
         unitLabel: "개",
         packageSize: "",
-        capacityUnit: "",
-        currentConsumerCount: "1"
+        capacityUnit: ""
       };
     });
   }
@@ -113,12 +111,7 @@ export function ProductEditor({
         return;
       }
       if (!Number.isInteger(lowStockThreshold)) {
-        setFormError("개봉·소진 제품의 재고 알림 수량은 포장 개수 정수로 입력해주세요.");
-        return;
-      }
-      const consumerCount = Number(draft.currentConsumerCount);
-      if (!Number.isInteger(consumerCount) || consumerCount < 1) {
-        setFormError("현재 사용하는 사람 수는 1명 이상의 정수로 입력해주세요.");
+        setFormError("개봉일과 다 쓴 날만 기록하는 제품의 재고 알림 수량은 정수로 입력해주세요.");
         return;
       }
     }
@@ -253,8 +246,8 @@ export function ProductEditor({
                 selected={draft.trackingMode === "count"}
                 disabled={isEdit}
                 symbol="−1"
-                title="개수 직접 차감"
-                description="소고기 5인분처럼 사용할 때 수량을 뺌"
+                title="쓸 때마다 수량 줄이기"
+                description="닭안심·달걀처럼 사용할 때마다 실제 남은 수량을 줄임"
                 onSelect={() => selectTrackingMode("count")}
               />
               <ModeButton
@@ -262,8 +255,8 @@ export function ProductEditor({
                 selected={draft.trackingMode === "cycle"}
                 disabled={isEdit}
                 symbol="↻"
-                title="개봉 → 소진"
-                description="오일 2통처럼 개수로 재고를 세고 한 통씩 사용"
+                title="개봉일과 다 쓴 날만 기록"
+                description="오일·샴푸처럼 한 개를 열고 다 쓸 때만 기록"
                 onSelect={() => selectTrackingMode("cycle")}
               />
             </div>
@@ -321,19 +314,9 @@ export function ProductEditor({
                   />
                 </label>
               </div>
-              <label>
-                <span className="field-label">현재 사용하는 사람 수</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={draft.currentConsumerCount}
-                  onChange={(event) => update("currentConsumerCount", event.target.value)}
-                />
-                <span className="field-hint">
-                  제품을 개봉할 때 개봉일과 사용 인원을 기록하면 한 통의 실제 사용 기간을 학습합니다.
-                </span>
-              </label>
+              <p className="field-hint">
+                함께 사용하는 사람 수는 실제로 새 제품을 개봉할 때 입력합니다.
+              </p>
             </section>
           ) : null}
 
@@ -504,7 +487,6 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
         ? ""
         : String(product.package_size),
     capacityUnit: product?.capacity_unit || "",
-    currentConsumerCount: String(product?.current_consumer_count ?? 1),
     preferredStoreId: product?.preferred_store_id || "",
     notes: product?.notes || ""
   };
