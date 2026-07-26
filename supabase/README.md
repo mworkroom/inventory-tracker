@@ -6,6 +6,12 @@ history. The latest Inventory Tracker v2 migration rebuilds only the five
 `inventory_*` tables and their functions, policies, triggers, indexes, and seed
 stores.
 
+Later migrations extend that baseline without rewriting it. In particular,
+`20260726020940_add_product_shopping_malls.sql` adds the protected
+`inventory_product_stores` relation and atomic product RPCs used for selecting
+multiple shopping malls. Its follow-up migration adds the covering indexes
+required by the relation's workspace and audit foreign keys.
+
 The baseline is intentionally destructive to Inventory Tracker data. Do not
 apply it to production until an inventory-only backup has been captured and
 the matching frontend release is ready. It does not delete shared Auth,

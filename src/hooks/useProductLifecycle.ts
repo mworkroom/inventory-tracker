@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { WORKSPACE_ID } from "../config";
 import { readableError } from "../lib/errors";
+import { attachProductStoreIds } from "../lib/inventoryStores";
 import { supabase } from "../lib/supabase";
-import type { InventoryProduct } from "../types";
+import type { InventoryProduct, InventoryProductStore } from "../types";
 
 interface ProductLifecycleState {
   archivedProducts: InventoryProduct[];
@@ -26,12 +27,19 @@ export function useProductLifecycle(): ProductLifecycleState {
     setLoading(true);
     setError(null);
 
-    const { data, error: selectError } = await supabase
-      .from("inventory_products")
-      .select("*")
-      .eq("workspace_id", WORKSPACE_ID)
-      .eq("is_archived", true)
-      .order("name", { ascending: true });
+    const [productsResult, productStoresResult] = await Promise.all([
+      supabase
+        .from("inventory_products")
+        .select("*")
+        .eq("workspace_id", WORKSPACE_ID)
+        .eq("is_archived", true)
+        .order("name", { ascending: true }),
+      supabase
+        .from("inventory_product_stores")
+        .select("*")
+        .eq("workspace_id", WORKSPACE_ID)
+    ]);
+    const selectError = productsResult.error || productStoresResult.error;
 
     if (selectError) {
       const message = readableError(selectError, "제품을 처리하지 못했습니다.");
@@ -40,7 +48,12 @@ export function useProductLifecycle(): ProductLifecycleState {
       return;
     }
 
-    setArchivedProducts((data || []) as InventoryProduct[]);
+    setArchivedProducts(
+      attachProductStoreIds(
+        (productsResult.data || []) as InventoryProduct[],
+        (productStoresResult.data || []) as InventoryProductStore[]
+      )
+    );
     setLoading(false);
   }, []);
 

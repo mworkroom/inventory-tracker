@@ -6,6 +6,7 @@ import {
   isInventoryAttentionNeeded,
   isRepurchaseDue
 } from "../lib/inventory";
+import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
   InventoryFilter,
   InventoryProduct,
@@ -113,10 +114,10 @@ export function useInventoryViewModel({
         }
         if (!normalizedQuery) return true;
 
-        const storeName = product.preferred_store_id
-          ? storeById.get(product.preferred_store_id)?.name || ""
-          : "";
-        return `${product.name} ${product.category || ""} ${product.notes || ""} ${storeName}`
+        const storeNames = getProductStoreIds(product)
+          .map((storeId) => storeById.get(storeId)?.name || "")
+          .join(" ");
+        return `${product.name} ${product.category || ""} ${product.notes || ""} ${storeNames}`
           .toLocaleLowerCase("ko-KR")
           .includes(normalizedQuery);
       })
@@ -174,7 +175,7 @@ function compareProducts(
   return a.name.localeCompare(b.name, "ko-KR");
 }
 
-function groupByStore(
+export function groupByStore(
   products: InventoryProduct[],
   storeById: Map<string, InventoryStore>
 ): InventoryGroup[] {
@@ -184,18 +185,22 @@ function groupByStore(
   >();
 
   products.forEach((product) => {
-    const store = product.preferred_store_id
-      ? storeById.get(product.preferred_store_id) || null
-      : null;
-    const key = store?.id || "unassigned";
-    const current = groups.get(key) || {
-      key,
-      name: store?.name || "구매처 미지정",
-      sortOrder: store?.sort_order ?? Number.MAX_SAFE_INTEGER,
-      products: []
-    };
-    current.products.push(product);
-    groups.set(key, current);
+    const stores = getProductStoreIds(product)
+      .map((storeId) => storeById.get(storeId) || null)
+      .filter((store): store is InventoryStore => Boolean(store));
+    const productStores = stores.length ? stores : [null];
+
+    productStores.forEach((store) => {
+      const key = store?.id || "unassigned";
+      const current = groups.get(key) || {
+        key,
+        name: store?.name || "쇼핑몰 미지정",
+        sortOrder: store?.sort_order ?? Number.MAX_SAFE_INTEGER,
+        products: []
+      };
+      current.products.push(product);
+      groups.set(key, current);
+    });
   });
 
   return [...groups.values()].sort(

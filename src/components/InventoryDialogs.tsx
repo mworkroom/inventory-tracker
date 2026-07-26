@@ -55,6 +55,9 @@ export function InventoryDialogs({
         <PurchaseDialog
           product={controller.purchaseState.product}
           stores={inventory.stores}
+          purchases={
+            view.purchasesByProduct.get(controller.purchaseState.product.id) || []
+          }
           purchase={controller.purchaseState.purchase}
           mode={controller.purchaseState.mode}
           busy={busy}

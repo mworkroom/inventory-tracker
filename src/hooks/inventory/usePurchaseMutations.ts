@@ -32,12 +32,9 @@ export function usePurchaseMutations({
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
         const dates = parsePurchaseDates(draft.datesText);
-        const storeId =
-          stores.find((store) => store.name === "기타")?.id ||
-          product.preferred_store_id ||
-          stores[0]?.id;
-        if (!storeId) {
-          throw new Error("과거 구매일을 저장할 기본 구매처가 없습니다.");
+        const storeId = draft.storeId;
+        if (!stores.some((store) => store.id === storeId)) {
+          throw new Error("과거 구매일을 저장할 쇼핑몰을 선택해주세요.");
         }
         const rows = dates.map((purchasedOn) => ({
           workspace_id: WORKSPACE_ID,

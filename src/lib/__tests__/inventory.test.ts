@@ -17,6 +17,11 @@ import {
   parsePurchaseDates,
   usageCycleDurationDays
 } from "../inventory";
+import {
+  attachProductStoreIds,
+  getProductStoreIds
+} from "../inventoryStores";
+import { groupByStore } from "../../hooks/useInventoryViewModel";
 
 const baseProduct: InventoryProduct = {
   id: "product-1",
@@ -41,6 +46,69 @@ const baseProduct: InventoryProduct = {
   created_at: "2026-07-19T00:00:00Z",
   updated_at: "2026-07-19T00:00:00Z"
 };
+
+test("기존 주구매처는 쇼핑몰 연결이 없을 때 단일 쇼핑몰로 유지한다", () => {
+  assert.deepEqual(
+    getProductStoreIds({
+      ...baseProduct,
+      preferred_store_id: "store-legacy"
+    }),
+    ["store-legacy"]
+  );
+});
+
+test("복수 쇼핑몰 연결을 제품에 합치고 쇼핑몰별 그룹에 각각 표시한다", () => {
+  const stores = [
+    {
+      id: "store-coupang",
+      workspace_id: "workspace-1",
+      name: "쿠팡",
+      sort_order: 10,
+      is_active: true,
+      created_by: null,
+      created_at: "2026-07-19T00:00:00Z"
+    },
+    {
+      id: "store-kurly",
+      workspace_id: "workspace-1",
+      name: "마켓컬리",
+      sort_order: 30,
+      is_active: true,
+      created_by: null,
+      created_at: "2026-07-19T00:00:00Z"
+    }
+  ];
+  const [product] = attachProductStoreIds(
+    [baseProduct],
+    [
+      {
+        workspace_id: "workspace-1",
+        product_id: baseProduct.id,
+        store_id: "store-kurly",
+        created_by: null,
+        created_at: "2026-07-19T00:00:00Z"
+      },
+      {
+        workspace_id: "workspace-1",
+        product_id: baseProduct.id,
+        store_id: "store-coupang",
+        created_by: null,
+        created_at: "2026-07-19T00:00:00Z"
+      }
+    ],
+    stores
+  );
+
+  assert.deepEqual(product.store_ids, ["store-coupang", "store-kurly"]);
+  assert.deepEqual(
+    groupByStore(product ? [product] : [], new Map(stores.map((store) => [store.id, store])))
+      .map((group) => [group.name, group.products.map((item) => item.id)]),
+    [
+      ["쿠팡", [baseProduct.id]],
+      ["마켓컬리", [baseProduct.id]]
+    ]
+  );
+});
 
 function cycle(overrides: Partial<UsageCycle> = {}): UsageCycle {
   return {

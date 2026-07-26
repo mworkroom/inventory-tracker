@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { formatQuantity, isStockInitialized } from "../lib/inventory";
+import { getProductStoreIds } from "../lib/inventoryStores";
 import type { InventoryProduct, InventoryStore } from "../types";
 import { CloseIcon } from "./Icons";
 
@@ -68,7 +69,11 @@ export function ArchivedProductsDialog({
           <div className="archived-products-loading">숨긴 제품을 불러오고 있습니다.</div>
         ) : products.length ? (
           <ul className="archived-products-list">
-            {products.map((product) => (
+            {products.map((product) => {
+              const shoppingMalls = getProductStoreIds(product)
+                .map((storeId) => storeById.get(storeId) || "쇼핑몰 미확인")
+                .join(", ");
+              return (
               <li key={product.id}>
                 <div>
                   <strong>{product.name}</strong>
@@ -76,9 +81,9 @@ export function ArchivedProductsDialog({
                     {isStockInitialized(product)
                       ? `현재 ${formatQuantity(product.current_quantity)}${product.unit_label}`
                       : "재고 미설정"}
-                    {product.preferred_store_id
-                      ? ` · ${storeById.get(product.preferred_store_id) || "구매처 미지정"}`
-                      : " · 구매처 미지정"}
+                    {shoppingMalls
+                      ? ` · ${shoppingMalls}`
+                      : " · 쇼핑몰 미지정"}
                   </span>
                 </div>
                 <button
@@ -90,7 +95,8 @@ export function ArchivedProductsDialog({
                   목록에 표시
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         ) : (
           <div className="archived-products-empty">

@@ -6,6 +6,7 @@ import {
   parsePurchaseDates,
   todayIso
 } from "../lib/inventory";
+import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
   InventoryProduct,
   InventoryPurchase,
@@ -21,6 +22,7 @@ type CommonPurchaseField = "storeId" | "packageCount" | "packageSize" | "package
 interface PurchaseDialogProps {
   product: InventoryProduct;
   stores: InventoryStore[];
+  purchases: InventoryPurchase[];
   purchase: InventoryPurchase | null;
   mode: PurchaseDialogMode;
   busy: boolean;
@@ -33,6 +35,7 @@ interface PurchaseDialogProps {
 export function PurchaseDialog({
   product,
   stores,
+  purchases,
   purchase,
   mode,
   busy,
@@ -42,20 +45,20 @@ export function PurchaseDialog({
   onDelete
 }: PurchaseDialogProps) {
   const [draft, setDraft] = useState<PurchaseDraft>(() =>
-    makePurchaseDraft(product, stores, purchase)
+    makePurchaseDraft(product, stores, purchases, purchase)
   );
   const [historyDraft, setHistoryDraft] = useState<PurchaseHistoryDraft>(() =>
-    makeHistoryDraft()
+    makeHistoryDraft(product, stores, purchases)
   );
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
-    setDraft(makePurchaseDraft(product, stores, purchase));
-    setHistoryDraft(makeHistoryDraft());
+    setDraft(makePurchaseDraft(product, stores, purchases, purchase));
+    setHistoryDraft(makeHistoryDraft(product, stores, purchases));
     setFormError(null);
     setDeleteArmed(false);
-  }, [mode, product, purchase, stores]);
+  }, [mode, product, purchase, purchases, stores]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -104,6 +107,11 @@ export function PurchaseDialog({
   async function submitHistory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
+
+    if (!historyDraft.storeId) {
+      setFormError("쇼핑몰을 선택해주세요.");
+      return;
+    }
 
     try {
       parsePurchaseDates(historyDraft.datesText);
@@ -173,6 +181,19 @@ export function PurchaseDialog({
 
         {mode === "history" ? (
           <form className="action-form" onSubmit={(event) => void submitHistory(event)}>
+            <label>
+              <span className="field-label">쇼핑몰</span>
+              <select
+                value={historyDraft.storeId}
+                onChange={(event) => updateHistoryDraft("storeId", event.target.value)}
+              >
+                <option value="">선택</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
+            </label>
+
             <label>
               <span className="field-label">과거 구매일</span>
               <textarea
@@ -311,7 +332,7 @@ function PurchaseCommonFields({
   return (
     <>
       <label>
-        <span className="field-label">구매처</span>
+        <span className="field-label">쇼핑몰</span>
         <select
           value={values.storeId}
           onChange={(event) => onChange("storeId", event.target.value)}
@@ -366,7 +387,7 @@ function PurchaseCommonFields({
 function validateCommonPurchaseFields(
   values: PurchaseDraft
 ): string | null {
-  if (!values.storeId) return "구매처를 선택해주세요.";
+  if (!values.storeId) return "쇼핑몰을 선택해주세요.";
   const packageCount = Number(values.packageCount);
   if (!Number.isInteger(packageCount) || packageCount < 1) {
     return "구매 수량을 1 이상의 정수로 입력해주세요.";
@@ -387,11 +408,14 @@ function validateCommonPurchaseFields(
 function makePurchaseDraft(
   product: InventoryProduct,
   stores: InventoryStore[],
+  purchases: InventoryPurchase[],
   purchase: InventoryPurchase | null
 ): PurchaseDraft {
   return {
     purchasedOn: purchase?.purchased_on || todayIso(),
-    storeId: purchase?.store_id || product.preferred_store_id || stores[0]?.id || "",
+    storeId:
+      purchase?.store_id ||
+      defaultStoreId(product, stores, purchases),
     packageCount: String(purchase?.package_count ?? 1),
     packageSize:
       purchase?.package_size === null || purchase?.package_size === undefined
@@ -410,10 +434,28 @@ function makePurchaseDraft(
   };
 }
 
-function makeHistoryDraft(): PurchaseHistoryDraft {
+function makeHistoryDraft(
+  product: InventoryProduct,
+  stores: InventoryStore[],
+  purchases: InventoryPurchase[]
+): PurchaseHistoryDraft {
   return {
+    storeId: defaultStoreId(product, stores, purchases),
     datesText: ""
   };
+}
+
+function defaultStoreId(
+  product: InventoryProduct,
+  stores: InventoryStore[],
+  purchases: InventoryPurchase[]
+): string {
+  return (
+    purchases[0]?.store_id ||
+    getProductStoreIds(product)[0] ||
+    stores[0]?.id ||
+    ""
+  );
 }
 
 function formatPurchaseAmount(

@@ -8,10 +8,12 @@ import {
 } from "react";
 import { WORKSPACE_ID } from "../../config";
 import { readableError } from "../../lib/errors";
+import { attachProductStoreIds } from "../../lib/inventoryStores";
 import { supabase } from "../../lib/supabase";
 import type {
   InventoryEvent,
   InventoryProduct,
+  InventoryProductStore,
   InventoryPurchase,
   InventoryStore,
   UsageCycle
@@ -43,6 +45,7 @@ export function useInventoryData(
             eventsResult,
             cyclesResult,
             storesResult,
+            productStoresResult,
             purchasesResult
           ] = await Promise.all([
             supabase
@@ -73,6 +76,10 @@ export function useInventoryData(
               .order("sort_order", { ascending: true })
               .order("name", { ascending: true }),
             supabase
+              .from("inventory_product_stores")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID),
+            supabase
               .from("inventory_purchases")
               .select("*")
               .eq("workspace_id", WORKSPACE_ID)
@@ -86,16 +93,25 @@ export function useInventoryData(
             eventsResult.error ||
             cyclesResult.error ||
             storesResult.error ||
+            productStoresResult.error ||
             purchasesResult.error;
           if (firstError) {
             setError(readableError(firstError));
             return;
           }
 
-          setProducts((productsResult.data || []) as InventoryProduct[]);
+          const stores = (storesResult.data || []) as InventoryStore[];
+          const productStores = (productStoresResult.data || []) as InventoryProductStore[];
+          setProducts(
+            attachProductStoreIds(
+              (productsResult.data || []) as InventoryProduct[],
+              productStores,
+              stores
+            )
+          );
           setEvents((eventsResult.data || []) as InventoryEvent[]);
           setCycles((cyclesResult.data || []) as UsageCycle[]);
-          setStores((storesResult.data || []) as InventoryStore[]);
+          setStores(stores);
           setPurchases((purchasesResult.data || []) as InventoryPurchase[]);
         } catch (caught) {
           setError(readableError(caught));

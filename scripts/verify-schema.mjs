@@ -17,7 +17,9 @@ assert.deepEqual(
     "20260724194709_add_inventory_foreign_key_indexes.sql",
     "20260724203523_separate_product_creation_from_inventory_events.sql",
     "20260724205237_use_seoul_inventory_business_date.sql",
-    "20260724212046_correct_latest_inventory_event_amount.sql"
+    "20260724212046_correct_latest_inventory_event_amount.sql",
+    "20260726020940_add_product_shopping_malls.sql",
+    "20260726021227_add_product_store_foreign_key_indexes.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -44,6 +46,13 @@ const eventCorrectionSql = await readFile(
   join(
     migrationsDirectory,
     "20260724212046_correct_latest_inventory_event_amount.sql"
+  ),
+  "utf8"
+);
+const shoppingMallsSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260726020940_add_product_shopping_malls.sql"
   ),
   "utf8"
 );
@@ -143,6 +152,42 @@ assert.match(
   /revoke all on function public\.correct_latest_inventory_event_amount\(uuid, numeric\)[\s\S]*?grant execute on function public\.correct_latest_inventory_event_amount\(uuid, numeric\)[\s\S]*?to authenticated;/,
   "재고 기록 수량 정정 RPC의 실행 권한이 올바르지 않습니다."
 );
+assert.match(
+  shoppingMallsSql,
+  /create table public\.inventory_product_stores/,
+  "제품과 복수 쇼핑몰을 연결하는 테이블이 없습니다."
+);
+assert.match(
+  shoppingMallsSql,
+  /alter table public\.inventory_product_stores enable row level security/,
+  "제품 쇼핑몰 연결 테이블에 RLS가 활성화되지 않았습니다."
+);
+assert.doesNotMatch(
+  shoppingMallsSql,
+  /grant [^;]*\b(?:insert|update|delete)\b[^;]* on table public\.inventory_product_stores/i,
+  "제품 쇼핑몰 연결을 브라우저가 직접 변경할 수 있습니다."
+);
+
+for (const functionName of [
+  "create_inventory_product_with_stores",
+  "update_inventory_product_with_stores"
+]) {
+  const start = shoppingMallsSql.indexOf(`create function public.${functionName}(`);
+  assert.notEqual(start, -1, `${functionName} 함수가 없습니다.`);
+  const bodyEnd = shoppingMallsSql.indexOf("\n$$;", start);
+  assert.notEqual(bodyEnd, -1, `${functionName} 함수 본문 끝을 찾지 못했습니다.`);
+  const definition = shoppingMallsSql.slice(start, bodyEnd);
+  assert.match(
+    definition,
+    /security definer/,
+    `${functionName} 함수가 보호된 테이블에 원자적으로 쓰도록 구성되지 않았습니다.`
+  );
+  assert.match(
+    definition,
+    /private\.(?:is_workspace_member|replace_inventory_product_stores)/,
+    `${functionName} 함수에 workspace 또는 쇼핑몰 연결 검증이 없습니다.`
+  );
+}
 
 for (const functionName of [
   "create_inventory_product",

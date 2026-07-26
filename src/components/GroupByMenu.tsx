@@ -12,7 +12,7 @@ const GROUPING_OPTIONS: Array<{
   label: string;
 }> = [
   { value: "category", label: "카테고리" },
-  { value: "store", label: "구매처" }
+  { value: "store", label: "쇼핑몰" }
 ];
 
 export function GroupByMenu({ value, onChange }: GroupByMenuProps) {

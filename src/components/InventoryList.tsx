@@ -92,7 +92,7 @@ export function InventoryList({
         <div className="list-heading-copy">
           <span>
             {viewMode === "store"
-              ? `구매처 ${view.storeGroups.length}곳 · 제품 ${view.visibleProducts.length}개`
+              ? `쇼핑몰 ${view.storeGroups.length}곳 · 제품 ${view.visibleProducts.length}개`
               : `카테고리 ${view.categoryGroups.length}개 · 제품 ${view.visibleProducts.length}개`}
           </span>
         </div>
@@ -113,7 +113,7 @@ export function InventoryList({
           className="store-groups"
           aria-label={
             viewMode === "store"
-              ? "주구매처별 재고 목록"
+              ? "쇼핑몰별 재고 목록"
               : "카테고리별 재고 목록"
           }
         >

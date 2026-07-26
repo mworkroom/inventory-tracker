@@ -30,7 +30,6 @@ export function useInventory(userId: string): InventoryState {
   }, []);
 
   const productMutations = useProductMutations({
-    userId,
     refresh: data.refresh,
     runMutation
   });

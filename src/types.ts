@@ -20,6 +20,14 @@ export interface InventoryStore {
   created_at: string;
 }
 
+export interface InventoryProductStore {
+  workspace_id: string;
+  product_id: string;
+  store_id: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface InventoryProduct {
   id: string;
   workspace_id: string;
@@ -37,6 +45,7 @@ export interface InventoryProduct {
   active_opened_on: string | null;
   active_consumer_count: number | null;
   preferred_store_id: string | null;
+  store_ids?: string[];
   notes: string | null;
   is_archived: boolean;
   created_by: string | null;
@@ -101,7 +110,7 @@ export interface ProductDraft {
   alertDays: string;
   packageSize: string;
   capacityUnit: string;
-  preferredStoreId: string;
+  storeIds: string[];
   notes: string;
 }
 
@@ -138,6 +147,7 @@ export interface PurchaseDraft {
 }
 
 export interface PurchaseHistoryDraft {
+  storeId: string;
   datesText: string;
 }
 

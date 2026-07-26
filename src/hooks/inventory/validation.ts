@@ -27,7 +27,7 @@ export function buildPurchaseCommonPayload(
   draft: PurchaseDraft,
   userId: string
 ) {
-  if (!draft.storeId) throw new Error("구매처를 선택해주세요.");
+  if (!draft.storeId) throw new Error("쇼핑몰을 선택해주세요.");
   const packageCount = parseRequiredInteger(draft.packageCount, "구매 수량");
   if (packageCount < 1) throw new Error("구매 수량은 1 이상이어야 합니다.");
 

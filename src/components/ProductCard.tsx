@@ -7,6 +7,7 @@ import {
   isRepurchaseDue,
   isStockInitialized
 } from "../lib/inventory";
+import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
   InventoryAction,
   InventoryEvent,
@@ -76,9 +77,9 @@ export function ProductCard({
     .slice(0, 3);
   const recentPurchases = purchases.slice(0, 5);
   const storeById = new Map(stores.map((store) => [store.id, store]));
-  const preferredStoreName = product.preferred_store_id
-    ? storeById.get(product.preferred_store_id)?.name || "구매처 미확인"
-    : null;
+  const shoppingMallNames = getProductStoreIds(product)
+    .map((storeId) => storeById.get(storeId)?.name || "쇼핑몰 미확인");
+  const shoppingMallSummary = shoppingMallNames.join(", ");
   const isCycle = product.tracking_mode === "cycle";
   const stockInitialized = isStockInitialized(product);
   const hasActiveProduct = Boolean(product.active_opened_on);
@@ -146,7 +147,7 @@ export function ProductCard({
           <span className="product-summary-meta">
             {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
             {hasActiveProduct ? " · 사용 중" : ""}
-            {preferredStoreName ? ` · ${preferredStoreName}` : ""}
+            {shoppingMallSummary ? ` · ${shoppingMallSummary}` : ""}
           </span>
         </span>
         <ChevronIcon className="product-chevron" />
@@ -161,7 +162,7 @@ export function ProductCard({
 
           <dl className="product-info">
             <InfoRow label="카테고리" value={product.category || "미분류"} />
-            <InfoRow label="주구매처" value={preferredStoreName || "미지정"} />
+            <InfoRow label="쇼핑몰" value={shoppingMallSummary || "미지정"} />
             <InfoRow
               label="현재 재고"
               value={stockInitialized
@@ -414,7 +415,7 @@ export function ProductCard({
             {recentPurchases.length ? (
               <ul className="purchase-history-list">
                 {recentPurchases.map((purchase) => {
-                  const storeName = storeById.get(purchase.store_id)?.name || "구매처 미확인";
+                  const storeName = storeById.get(purchase.store_id)?.name || "쇼핑몰 미확인";
                   return (
                     <li key={purchase.id}>
                       <button type="button" disabled={busy} onClick={() => onPurchaseEdit(purchase)}>

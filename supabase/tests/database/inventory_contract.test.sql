@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(25);
 
 select has_table(
   'public',
@@ -27,6 +27,11 @@ select has_table(
   'public',
   'inventory_stores',
   'blank rebuild creates inventory_stores'
+);
+select has_table(
+  'public',
+  'inventory_product_stores',
+  'blank rebuild creates inventory_product_stores'
 );
 
 select is(
@@ -57,6 +62,24 @@ select is(
   false,
   'authenticated clients cannot append ledger events directly'
 );
+select is(
+  (
+    select relrowsecurity
+    from pg_class
+    where oid = 'public.inventory_product_stores'::regclass
+  ),
+  true,
+  'RLS is enabled on product shopping malls'
+);
+select is(
+  has_table_privilege(
+    'authenticated',
+    'public.inventory_product_stores',
+    'INSERT'
+  ),
+  false,
+  'authenticated clients cannot insert product shopping malls directly'
+);
 
 insert into auth.users (id, email)
 values
@@ -81,12 +104,18 @@ set local request.jwt.claim.sub =
 
 select lives_ok(
   $$
-    select public.create_inventory_product(
+    select public.create_inventory_product_with_stores(
       p_workspace_id := '00000000-0000-0000-0000-000000000002'::uuid,
       p_name := '대패삼겹',
       p_tracking_mode := 'count',
       p_unit_label := '인분',
       p_low_stock_threshold := 2,
+      p_store_ids := array(
+        select id
+        from public.inventory_stores
+        where name in ('쿠팡', '마켓컬리')
+        order by sort_order
+      ),
       p_category := '식료품'
     )
   $$,
@@ -113,6 +142,73 @@ select results_eq(
   $$,
   $$ values (0::bigint) $$,
   'product creation does not append an inventory event'
+);
+select results_eq(
+  $$
+    select store.name
+    from public.inventory_product_stores as product_store
+    join public.inventory_stores as store
+      on store.id = product_store.store_id
+    join public.inventory_products as product
+      on product.id = product_store.product_id
+    where product.name = '대패삼겹'
+    order by store.sort_order
+  $$,
+  $$ values ('쿠팡'::text), ('마켓컬리'::text) $$,
+  'product creation stores every selected shopping mall'
+);
+select results_eq(
+  $$
+    select store.name
+    from public.inventory_products as product
+    join public.inventory_stores as store
+      on store.id = product.preferred_store_id
+    where product.name = '대패삼겹'
+  $$,
+  $$ values ('쿠팡'::text) $$,
+  'the first shopping mall remains available to legacy readers'
+);
+
+select lives_ok(
+  $$
+    select public.update_inventory_product_with_stores(
+      p_product_id := (
+        select id
+        from public.inventory_products
+        where name = '대패삼겹'
+      ),
+      p_name := '대패삼겹',
+      p_unit_label := '인분',
+      p_low_stock_threshold := 2,
+      p_alert_days := 30,
+      p_package_size := null,
+      p_capacity_unit := null,
+      p_notes := null,
+      p_store_ids := array[
+        (
+          select id
+          from public.inventory_stores
+          where name = '마켓컬리'
+        )
+      ],
+      p_category := '식료품'
+    )
+  $$,
+  'a workspace member can update product details and shopping malls atomically'
+);
+select results_eq(
+  $$
+    select store.name
+    from public.inventory_product_stores as product_store
+    join public.inventory_stores as store
+      on store.id = product_store.store_id
+    join public.inventory_products as product
+      on product.id = product_store.product_id
+    where product.name = '대패삼겹'
+    order by store.sort_order
+  $$,
+  $$ values ('마켓컬리'::text) $$,
+  'updating shopping malls replaces obsolete product links'
 );
 
 select lives_ok(
@@ -184,6 +280,11 @@ select results_eq(
   $$ select count(*)::bigint from public.inventory_products $$,
   $$ values (0::bigint) $$,
   'RLS hides another workspace member product from an outsider'
+);
+select results_eq(
+  $$ select count(*)::bigint from public.inventory_product_stores $$,
+  $$ values (0::bigint) $$,
+  'RLS hides product shopping malls from an outsider'
 );
 select throws_ok(
   $$

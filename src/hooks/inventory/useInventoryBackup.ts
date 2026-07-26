@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import type {
   InventoryEvent,
   InventoryProduct,
+  InventoryProductStore,
   InventoryPurchase,
   InventoryStore,
   UsageCycle
@@ -16,6 +17,7 @@ type BackupTable =
   | "inventory_events"
   | "inventory_usage_cycles"
   | "inventory_stores"
+  | "inventory_product_stores"
   | "inventory_purchases";
 
 export function useInventoryBackup(runMutation: RunInventoryMutation) {
@@ -23,7 +25,8 @@ export function useInventoryBackup(runMutation: RunInventoryMutation) {
     () =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        const [products, events, cycles, stores, purchases] = await Promise.all([
+        const [products, events, cycles, stores, productStores, purchases] =
+          await Promise.all([
           fetchAllRows<InventoryProduct>("inventory_products", "name", true),
           fetchAllRows<InventoryEvent>("inventory_events", "occurred_on", false),
           fetchAllRows<UsageCycle>(
@@ -32,21 +35,27 @@ export function useInventoryBackup(runMutation: RunInventoryMutation) {
             false
           ),
           fetchAllRows<InventoryStore>("inventory_stores", "sort_order", true),
+          fetchAllRows<InventoryProductStore>(
+            "inventory_product_stores",
+            "created_at",
+            true
+          ),
           fetchAllRows<InventoryPurchase>(
             "inventory_purchases",
             "purchased_on",
             false
           )
-        ]);
+          ]);
 
         const payload = {
-          version: 2,
+          version: 3,
           exportedAt: new Date().toISOString(),
           workspaceId: WORKSPACE_ID,
           products,
           events,
           usageCycles: cycles,
           stores,
+          productStores,
           purchases
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], {

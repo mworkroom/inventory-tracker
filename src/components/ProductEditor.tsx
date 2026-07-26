@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatQuantity, isStockInitialized } from "../lib/inventory";
+import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
   InventoryProduct,
   InventoryStore,
@@ -51,6 +52,15 @@ export function ProductEditor({
 
   function update<K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleStore(storeId: string) {
+    setDraft((current) => ({
+      ...current,
+      storeIds: current.storeIds.includes(storeId)
+        ? current.storeIds.filter((id) => id !== storeId)
+        : [...current.storeIds, storeId]
+    }));
   }
 
   function selectTrackingMode(mode: TrackingMode) {
@@ -223,19 +233,31 @@ export function ProductEditor({
                 ))}
               </select>
             </label>
-            <label>
-              <span className="field-label">주구매처 · 선택</span>
-              <select
-                value={draft.preferredStoreId}
-                onChange={(event) => update("preferredStoreId", event.target.value)}
+            <div className="shopping-mall-field">
+              <span className="field-label" id="shopping-mall-label">
+                쇼핑몰 · 복수 선택
+              </span>
+              <div
+                className="shopping-mall-options"
+                role="group"
+                aria-labelledby="shopping-mall-label"
               >
-                <option value="">미지정</option>
                 {stores.map((store) => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
+                  <button
+                    key={store.id}
+                    type="button"
+                    className={draft.storeIds.includes(store.id) ? "selected" : ""}
+                    aria-pressed={draft.storeIds.includes(store.id)}
+                    onClick={() => toggleStore(store.id)}
+                  >
+                    {store.name}
+                  </button>
                 ))}
-              </select>
-              <span className="field-hint">구매처별 보기에서 이 제품이 묶일 위치입니다.</span>
-            </label>
+              </div>
+              <span className="field-hint">
+                구매할 수 있는 쇼핑몰을 모두 선택합니다. 선택하지 않아도 저장할 수 있습니다.
+              </span>
+            </div>
           </section>
 
           <section className="form-section">
@@ -487,7 +509,7 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
         ? ""
         : String(product.package_size),
     capacityUnit: product?.capacity_unit || "",
-    preferredStoreId: product?.preferred_store_id || "",
+    storeIds: product ? getProductStoreIds(product) : [],
     notes: product?.notes || ""
   };
 }
