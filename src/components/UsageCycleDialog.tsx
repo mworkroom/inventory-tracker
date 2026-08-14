@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { todayIso, usageCycleDurationDays } from "../lib/inventory";
 import type { InventoryProduct, UsageCycle, UsageCycleDraft } from "../types";
+import { DateInput } from "./DateInput";
 import { CloseIcon } from "./Icons";
 
 interface UsageCycleDialogProps {
@@ -129,22 +130,22 @@ export function UsageCycleDialog({
           <div className="form-grid two-columns">
             <label>
               <span className="field-label">개봉일</span>
-              <input
-                type="date"
+              <DateInput
                 max={draft.finishedOn || todayIso()}
                 value={draft.openedOn}
-                onChange={(event) => update("openedOn", event.target.value)}
+                onChange={(value) => update("openedOn", value)}
               />
+              <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY</span>
             </label>
             <label>
               <span className="field-label">다 쓴 날</span>
-              <input
-                type="date"
+              <DateInput
                 min={draft.openedOn || undefined}
                 max={todayIso()}
                 value={draft.finishedOn}
-                onChange={(event) => update("finishedOn", event.target.value)}
+                onChange={(value) => update("finishedOn", value)}
               />
+              <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY</span>
             </label>
           </div>
 

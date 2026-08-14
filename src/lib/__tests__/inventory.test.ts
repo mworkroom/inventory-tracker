@@ -10,10 +10,13 @@ import {
   calculateStockCheckUsage,
   calculatePurchaseStats,
   estimateProduct,
+  formatDate,
+  formatDateInput,
   getInventoryAttentionKind,
   isInventoryAttentionNeeded,
   isRepurchaseDue,
   median,
+  parseDateInput,
   parsePurchaseDates,
   usageCycleDurationDays
 } from "../inventory";
@@ -329,8 +332,17 @@ test("앞으로의 입고일을 재구매 간격에 포함하고 같은 날 과�
   assert.equal(stats.nextPurchaseDate, "2025-03-31");
 });
 
-test("과거 구매일 붙여넣기는 점·하이픈·한글 날짜를 정규화하고 중복을 제거한다", () => {
-  assert.deepEqual(parsePurchaseDates("2024-02-10\n2024. 6. 21.\n2024년 11월 3일\n2024-02-10", "2025-01-01"), ["2024-02-10", "2024-06-21", "2024-11-03"]);
+test("미국식 날짜 입력은 ISO로 정규화하고 화면에는 미국식으로 표시한다", () => {
+  assert.equal(parseDateInput("2/10/2024"), "2024-02-10");
+  assert.equal(parseDateInput("02/10/2024"), "2024-02-10");
+  assert.equal(parseDateInput("2024-02-10"), "2024-02-10");
+  assert.equal(parseDateInput("2/30/2024"), null);
+  assert.equal(formatDateInput("2024-02-10"), "2/10/2024");
+  assert.equal(formatDate("2024-02-10"), "2/10/2024");
+});
+
+test("과거 구매일 붙여넣기는 미국식과 기존 날짜 형식을 정규화하고 중복을 제거한다", () => {
+  assert.deepEqual(parsePurchaseDates("2/10/2024\n06/21/2024\n2024년 11월 3일\n2024-02-10", "2025-01-01"), ["2024-02-10", "2024-06-21", "2024-11-03"]);
 });
 
 test("잘못된 날짜와 미래 날짜는 과거 구매일 입력에서 거부한다", () => {

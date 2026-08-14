@@ -364,20 +364,46 @@ export function parsePurchaseDates(
   return [...new Set(normalizedDates)].sort(compareIsoDate);
 }
 
-function normalizePurchaseDate(value: string): string | null {
-  const compactMatch = value.match(/^(\d{4})(\d{2})(\d{2})$/);
-  const koreanMatch = value.match(
+export function parseDateInput(value: string): string | null {
+  const trimmed = value.trim();
+  const usMatch = trimmed.match(
+    /^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/
+  );
+
+  if (usMatch) {
+    return toIsoDate(
+      Number(usMatch[3]),
+      Number(usMatch[1]),
+      Number(usMatch[2])
+    );
+  }
+
+  const compactMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const koreanMatch = trimmed.match(
     /^(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?\s*\.?$/
   );
-  const separatedMatch = value.match(
+  const separatedMatch = trimmed.match(
     /^(\d{4})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{1,2})\s*\.?$/
   );
   const match = compactMatch || koreanMatch || separatedMatch;
   if (!match) return null;
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
+  return toIsoDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+function normalizePurchaseDate(value: string): string | null {
+  return parseDateInput(value);
+}
+
+function toIsoDate(year: number, month: number, day: number): string | null {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return null;
+  }
+
   const date = new Date(Date.UTC(year, month - 1, day));
 
   if (
@@ -414,12 +440,14 @@ export function addDays(iso: string, days: number): string {
 
 export function formatDate(iso: string | null): string {
   if (!iso) return "—";
+  return formatDateInput(iso) || "—";
+}
+
+export function formatDateInput(iso: string | null): string {
+  if (!iso) return "";
   const [year, month, day] = iso.split("-").map(Number);
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
-  }).format(new Date(year, month - 1, day));
+  if (!toIsoDate(year, month, day)) return "";
+  return `${month}/${day}/${year}`;
 }
 
 export function formatQuantity(value: number): string {
@@ -466,7 +494,7 @@ export function eventLabel(
     case "finish":
       return `다 씀${event.consumer_count ? ` · ${event.consumer_count}명` : ""}`;
     case "adjustment":
-      return `재고 ${formatQuantity(event.quantity_after)}${unitLabel}로 정정`;
+      return `재고 ${formatQuantity(event.quantity_after)}${unitLabel}으로 정정`;
   }
 }
 

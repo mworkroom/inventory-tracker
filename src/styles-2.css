@@ -545,7 +545,9 @@
 }
 
 .product-form input[type="date"],
-.action-form input[type="date"] {
+.action-form input[type="date"],
+.product-form input.date-input,
+.action-form input.date-input {
   display: block;
   width: 100%;
   min-width: 0;
@@ -565,8 +567,8 @@
   text-align: left;
 }
 
-.product-form input:not([type="date"]),
-.action-form input:not([type="date"]) {
+.product-form input:not([type="date"]):not(.date-input),
+.action-form input:not([type="date"]):not(.date-input) {
   min-height: 46px;
   padding: 0 12px;
 }

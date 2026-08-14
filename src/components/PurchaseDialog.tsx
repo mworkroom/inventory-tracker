@@ -15,6 +15,7 @@ import type {
   PurchaseDraft
 } from "../types";
 import { CloseIcon } from "./Icons";
+import { DateInput } from "./DateInput";
 
 export type PurchaseDialogMode = "history" | "edit";
 type CommonPurchaseField = "storeId" | "packageCount" | "packageSize" | "packageUnit";
@@ -199,11 +200,11 @@ export function PurchaseDialog({
               <textarea
                 autoFocus
                 value={historyDraft.datesText}
-                placeholder={"2024-02-10\n2024. 6. 21.\n2024년 11월 3일"}
+                placeholder={"2/10/2024\n6/21/2024\n11/3/2024"}
                 onChange={(event) => updateHistoryDraft("datesText", event.target.value)}
               />
               <span className="field-hint">
-                한 줄에 하나씩 입력합니다. 한 날짜만 입력해도 됩니다.{" "}
+                한 줄에 하나씩 M/D/YYYY 또는 MM/DD/YYYY로 입력합니다. 한 날짜만 입력해도 됩니다.{" "}
                 {historyDateCount > 0 ? `${historyDateCount}개 날짜를 찾았습니다.` : ""}
               </span>
             </label>
@@ -223,13 +224,13 @@ export function PurchaseDialog({
           <form className="action-form" onSubmit={(event) => void submitEdit(event)}>
             <label>
               <span className="field-label">구매일</span>
-              <input
-                type="date"
+              <DateInput
                 max={todayIso()}
                 autoFocus
                 value={draft.purchasedOn}
-                onChange={(event) => updateDraft("purchasedOn", event.target.value)}
+                onChange={(value) => updateDraft("purchasedOn", value)}
               />
+              <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY로 입력합니다.</span>
             </label>
 
             <PurchaseCommonFields

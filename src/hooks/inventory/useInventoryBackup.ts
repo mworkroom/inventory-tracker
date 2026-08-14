@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { WORKSPACE_ID } from "../../config";
-import { todayIso } from "../../lib/inventory";
+import { formatDateInput, todayIso } from "../../lib/inventory";
 import { supabase } from "../../lib/supabase";
 import type {
   InventoryEvent,
@@ -64,7 +64,7 @@ export function useInventoryBackup(runMutation: RunInventoryMutation) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `inventory-backup-${todayIso()}.json`;
+        link.download = `inventory-backup-${formatDateInput(todayIso()).replace(/\//g, "-")}.json`;
         document.body.appendChild(link);
         link.click();
         link.remove();

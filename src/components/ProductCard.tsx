@@ -147,7 +147,6 @@ export function ProductCard({
           <span className="product-summary-meta">
             {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
             {hasActiveProduct ? " · 사용 중" : ""}
-            {shoppingMallSummary ? ` · ${shoppingMallSummary}` : ""}
           </span>
         </span>
         <ChevronIcon className="product-chevron" />
@@ -267,7 +266,7 @@ export function ProductCard({
                 }
               />
               <InfoRow
-                label="평소 다시 산 간격"
+                label="재구매 간격"
                 value={
                   purchaseStats.medianIntervalDays === null
                     ? purchaseStats.purchaseDateCount > 0
@@ -277,7 +276,7 @@ export function ProductCard({
                 }
               />
               <InfoRow
-                label="평소 재구매 시기"
+                label="재구매 예상일"
                 value={
                   purchaseStats.nextPurchaseDate
                     ? formatPurchaseForecast(
@@ -364,7 +363,7 @@ export function ProductCard({
             과거 구매일 추가
           </button>
           <p className="purchase-action-note">
-            현재 재고와 무관한 과거 날짜만 보충합니다. 앞으로는 입고만 기록하면 됩니다.
+            현재 재고와 무관한 과거 날짜만 보충합니다.
           </p>
 
           <section className="history-section">
@@ -409,7 +408,7 @@ export function ProductCard({
 
           <section className="purchase-history-section">
             <div className="section-heading">
-              <h3>입력한 과거 구매일</h3>
+              <h3>과거 구매일</h3>
               <span>{purchases.length}개</span>
             </div>
             {recentPurchases.length ? (

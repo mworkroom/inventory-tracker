@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { todayIso } from "../lib/inventory";
 import type { ActiveUsageDraft, InventoryProduct } from "../types";
+import { DateInput } from "./DateInput";
 import { CloseIcon } from "./Icons";
 
 interface ActiveUsageDialogProps {
@@ -94,13 +95,13 @@ export function ActiveUsageDialog({
         <form className="action-form" onSubmit={(event) => void submit(event)}>
           <label>
             <span className="field-label">개봉일</span>
-            <input
-              type="date"
+            <DateInput
               max={todayIso()}
               autoFocus
               value={draft.openedOn}
-              onChange={(event) => update("openedOn", event.target.value)}
+              onChange={(value) => update("openedOn", value)}
             />
+            <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY로 입력합니다.</span>
           </label>
 
           <label>

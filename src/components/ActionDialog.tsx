@@ -10,6 +10,7 @@ import type {
   InventoryActionDraft,
   InventoryProduct
 } from "../types";
+import { DateInput } from "./DateInput";
 import { CloseIcon } from "./Icons";
 
 interface ActionDialogProps {
@@ -67,6 +68,10 @@ export function ActionDialog({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
+    if (!draft.occurredOn) {
+      setFormError("기록 날짜를 M/D/YYYY 또는 MM/DD/YYYY로 입력해주세요.");
+      return;
+    }
     try {
       await onSubmit(draft);
     } catch (caught) {
@@ -216,14 +221,13 @@ export function ActionDialog({
             <span className="field-label">
               {action === "stock_check" ? "확인 날짜" : "기록 날짜"}
             </span>
-            <input
-              type="date"
+            <DateInput
               min={action === "finish" ? product.active_opened_on || undefined : undefined}
               max={todayIso()}
               value={draft.occurredOn}
-              onChange={(event) => update("occurredOn", event.target.value)}
+              onChange={(value) => update("occurredOn", value)}
             />
-            <span className="field-hint">며칠 전에 한 일을 지금 기록해도 됩니다.</span>
+            <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY로 입력합니다. 며칠 전에 한 일을 지금 기록해도 됩니다.</span>
           </label>
 
           {action === "adjustment" ? (
