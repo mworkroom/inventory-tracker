@@ -41,7 +41,15 @@ export function useProductMutations({
           p_current_consumer_count: 1,
           p_notes: draft.notes.trim() || null,
           p_store_ids: draft.storeIds,
-          p_category: normalizeCategory(draft.category)
+          p_category: normalizeCategory(draft.category),
+          p_next_sale_on: draft.nextSaleOn || null,
+          p_purchase_coverage_months: draft.purchaseCoverageMonths
+            ? parseRequiredInteger(draft.purchaseCoverageMonths, "구매할 기간")
+            : null,
+          p_purchase_safety_quantity: parseRequiredInteger(
+            draft.purchaseSafetyQuantity,
+            "여유 재고"
+          )
         });
         if (error) throw error;
         await refresh(true);
@@ -72,7 +80,15 @@ export function useProductMutations({
             p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
             p_category: normalizeCategory(draft.category),
             p_store_ids: draft.storeIds,
-            p_notes: draft.notes.trim() || null
+            p_notes: draft.notes.trim() || null,
+            p_next_sale_on: draft.nextSaleOn || null,
+            p_purchase_coverage_months: draft.purchaseCoverageMonths
+              ? parseRequiredInteger(draft.purchaseCoverageMonths, "구매할 기간")
+              : null,
+            p_purchase_safety_quantity: parseRequiredInteger(
+              draft.purchaseSafetyQuantity,
+              "여유 재고"
+            )
           }
         );
         if (error) throw error;

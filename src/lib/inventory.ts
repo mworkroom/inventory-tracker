@@ -1,4 +1,5 @@
 import type {
+  ConsumptionStats,
   InventoryEvent,
   InventoryProduct,
   InventoryPurchase,
@@ -96,7 +97,7 @@ export function estimateProduct(
     urgentReason = `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
   } else if (daysUrgent && remainingDays !== null) {
     urgentReason = forecastSource === "purchase"
-      ? `과거 구매일과 입고일 기준 다음 재구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
+      ? `과거 실제 구매일 기준 다음 재구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
       : `현재 사용 속도라면 약 ${Math.max(0, Math.round(remainingDays))}일 후 재고가 소진됩니다.`;
   }
 
@@ -136,6 +137,9 @@ export function isRepurchaseDue(
   product: InventoryProduct,
   purchaseStats: PurchaseStats
 ): boolean {
+  if (product.next_sale_on) {
+    return daysBetween(todayIso(), product.next_sale_on) <= product.alert_days;
+  }
   return (
     purchaseStats.daysUntilNextPurchase !== null &&
     purchaseStats.daysUntilNextPurchase <= product.alert_days
@@ -300,10 +304,7 @@ export function calculatePurchaseStats(
       event.event_type === "intake"
   );
   const uniqueDates = [
-    ...new Set([
-      ...productPurchases.map((purchase) => purchase.purchased_on),
-      ...productIntakes.map((event) => event.occurred_on)
-    ])
+    ...new Set(productPurchases.map((purchase) => purchase.purchased_on))
   ].sort(compareIsoDate);
   const intervals: number[] = [];
 
@@ -315,19 +316,243 @@ export function calculatePurchaseStats(
   const recentIntervals = intervals.slice(-7);
   const medianIntervalDays = median(recentIntervals);
   const lastPurchasedOn = uniqueDates.at(-1) ?? null;
+  const latestPurchase = lastPurchasedOn
+    ? productPurchases
+        .filter((purchase) => purchase.purchased_on === lastPurchasedOn)
+        .reduce<number>((sum, purchase) => sum + purchase.package_count, 0)
+    : null;
+  const latestIntake = [...productIntakes].sort((a, b) => {
+    const dateComparison = compareIsoDate(b.occurred_on, a.occurred_on);
+    return dateComparison || b.created_at.localeCompare(a.created_at);
+  })[0] ?? null;
   const nextPurchaseDate =
     lastPurchasedOn && medianIntervalDays !== null
       ? addDays(lastPurchasedOn, Math.round(medianIntervalDays))
       : null;
 
   return {
+    purchaseRecordCount: productPurchases.length,
     purchaseDateCount: uniqueDates.length,
+    totalPackageCount: productPurchases.reduce(
+      (sum, purchase) => sum + purchase.package_count,
+      0
+    ),
     intervalSampleCount: recentIntervals.length,
     medianIntervalDays,
+    firstPurchasedOn: uniqueDates[0] ?? null,
     lastPurchasedOn,
+    lastPurchasePackageCount: latestPurchase,
+    latestIntakeOn: latestIntake?.occurred_on ?? null,
+    latestIntakeQuantity: latestIntake
+      ? Math.abs(latestIntake.quantity_delta)
+      : null,
     nextPurchaseDate,
     daysUntilNextPurchase:
       nextPurchaseDate === null ? null : daysBetween(today, nextPurchaseDate)
+  };
+}
+
+export function calculateConsumptionStats(
+  product: InventoryProduct,
+  purchases: InventoryPurchase[],
+  events: InventoryEvent[],
+  estimate: ProductEstimate,
+  today = todayIso()
+): ConsumptionStats {
+  const usageBased = usageBasedConsumption(product, estimate);
+  const base = usageBased ?? purchaseBasedConsumption(
+    product,
+    purchases,
+    events,
+    today
+  );
+  const monthlyPackageCount = base.monthlyPackageCount;
+  const hasPurchasePlan = Boolean(
+    product.next_sale_on &&
+    product.purchase_coverage_months &&
+    monthlyPackageCount !== null
+  );
+  let expectedStockOnSaleDate: number | null = null;
+  let recommendedPurchaseQuantity: number | null = null;
+
+  if (
+    hasPurchasePlan &&
+    product.next_sale_on &&
+    product.purchase_coverage_months &&
+    monthlyPackageCount !== null
+  ) {
+    const monthsUntilSale = Math.max(
+      0,
+      daysBetween(today, product.next_sale_on) / 30.4375
+    );
+    expectedStockOnSaleDate = Math.max(
+      0,
+      product.current_quantity - monthlyPackageCount * monthsUntilSale
+    );
+    recommendedPurchaseQuantity = Math.max(
+      0,
+      Math.ceil(
+        monthlyPackageCount * product.purchase_coverage_months +
+        (product.purchase_safety_quantity || 0) -
+        expectedStockOnSaleDate
+      )
+    );
+  }
+
+  return {
+    ...base,
+    recommendedPurchaseQuantity,
+    expectedStockOnSaleDate
+  };
+}
+
+function usageBasedConsumption(
+  product: InventoryProduct,
+  estimate: ProductEstimate
+): Omit<ConsumptionStats, "recommendedPurchaseQuantity" | "expectedStockOnSaleDate"> | null {
+  if (
+    product.tracking_mode === "cycle" &&
+    product.package_size &&
+    product.capacity_unit &&
+    estimate.expectedCycleDays &&
+    estimate.expectedCycleDays > 0
+  ) {
+    const monthlyPackageCount = 30.4375 / estimate.expectedCycleDays;
+    const monthlyAmount = monthlyPackageCount * product.package_size;
+    return {
+      source: "usage",
+      monthlyAmount,
+      monthlyUnit: product.capacity_unit,
+      monthlyPackageCount,
+      annualAmount: monthlyAmount * 12,
+      sampleCount: estimate.cycleSampleCount,
+      observationDays: null,
+      inferredSizeRecordCount: 0,
+      excludedSizeRecordCount: 0
+    };
+  }
+
+  if (
+    product.tracking_mode === "count" &&
+    estimate.daysPerUnit &&
+    estimate.daysPerUnit > 0
+  ) {
+    const monthlyAmount = 30.4375 / estimate.daysPerUnit;
+    return {
+      source: "usage",
+      monthlyAmount,
+      monthlyUnit: product.unit_label,
+      monthlyPackageCount: monthlyAmount,
+      annualAmount: monthlyAmount * 12,
+      sampleCount: estimate.useSampleCount,
+      observationDays: null,
+      inferredSizeRecordCount: 0,
+      excludedSizeRecordCount: 0
+    };
+  }
+
+  return null;
+}
+
+function purchaseBasedConsumption(
+  product: InventoryProduct,
+  purchases: InventoryPurchase[],
+  events: InventoryEvent[],
+  today: string
+): Omit<ConsumptionStats, "recommendedPurchaseQuantity" | "expectedStockOnSaleDate"> {
+  const firstTrackingEvent = events
+    .filter((event) => event.product_id === product.id)
+    .map((event) => event.occurred_on)
+    .sort(compareIsoDate)[0] ?? today;
+  const historicalPurchases = purchases.filter(
+    (purchase) =>
+      purchase.product_id === product.id &&
+      purchase.purchased_on < firstTrackingEvent
+  );
+  const firstPurchaseOn = historicalPurchases
+    .map((purchase) => purchase.purchased_on)
+    .sort(compareIsoDate)[0] ?? null;
+  const observationDays = firstPurchaseOn
+    ? daysBetween(firstPurchaseOn, firstTrackingEvent)
+    : null;
+
+  if (!firstPurchaseOn || !observationDays || observationDays < 30) {
+    return emptyConsumptionStats(observationDays);
+  }
+
+  const totalPackages = historicalPurchases.reduce(
+    (sum, purchase) => sum + purchase.package_count,
+    0
+  );
+  const monthlyPackageCount = totalPackages / observationDays * 30.4375;
+
+  if (product.tracking_mode === "count") {
+    return {
+      source: "purchase",
+      monthlyAmount: monthlyPackageCount,
+      monthlyUnit: product.unit_label,
+      monthlyPackageCount,
+      annualAmount: monthlyPackageCount * 12,
+      sampleCount: historicalPurchases.length,
+      observationDays,
+      inferredSizeRecordCount: 0,
+      excludedSizeRecordCount: 0
+    };
+  }
+
+  if (!product.package_size || !product.capacity_unit) {
+    return emptyConsumptionStats(observationDays);
+  }
+
+  let totalCapacity = 0;
+  let inferredSizeRecordCount = 0;
+  let excludedSizeRecordCount = 0;
+  historicalPurchases.forEach((purchase) => {
+    if (purchase.package_size === null || !purchase.package_unit) {
+      totalCapacity += purchase.package_count * product.package_size!;
+      inferredSizeRecordCount += 1;
+      return;
+    }
+    if (purchase.package_unit.toLowerCase() !== product.capacity_unit!.toLowerCase()) {
+      excludedSizeRecordCount += 1;
+      return;
+    }
+    totalCapacity += purchase.package_count * purchase.package_size;
+  });
+
+  if (totalCapacity <= 0) {
+    return emptyConsumptionStats(observationDays, excludedSizeRecordCount);
+  }
+
+  const monthlyAmount = totalCapacity / observationDays * 30.4375;
+  const currentPackageMonthlyCount = monthlyAmount / product.package_size;
+  return {
+    source: "purchase",
+    monthlyAmount,
+    monthlyUnit: product.capacity_unit,
+    monthlyPackageCount: currentPackageMonthlyCount,
+    annualAmount: monthlyAmount * 12,
+    sampleCount: historicalPurchases.length,
+    observationDays,
+    inferredSizeRecordCount,
+    excludedSizeRecordCount
+  };
+}
+
+function emptyConsumptionStats(
+  observationDays: number | null,
+  excludedSizeRecordCount = 0
+): Omit<ConsumptionStats, "recommendedPurchaseQuantity" | "expectedStockOnSaleDate"> {
+  return {
+    source: null,
+    monthlyAmount: null,
+    monthlyUnit: null,
+    monthlyPackageCount: null,
+    annualAmount: null,
+    sampleCount: 0,
+    observationDays,
+    inferredSizeRecordCount: 0,
+    excludedSizeRecordCount
   };
 }
 

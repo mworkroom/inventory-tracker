@@ -19,7 +19,8 @@ assert.deepEqual(
     "20260724205237_use_seoul_inventory_business_date.sql",
     "20260724212046_correct_latest_inventory_event_amount.sql",
     "20260726020940_add_product_shopping_malls.sql",
-    "20260726021227_add_product_store_foreign_key_indexes.sql"
+    "20260726021227_add_product_store_foreign_key_indexes.sql",
+    "20260815042204_add_purchase_planning.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -53,6 +54,13 @@ const shoppingMallsSql = await readFile(
   join(
     migrationsDirectory,
     "20260726020940_add_product_shopping_malls.sql"
+  ),
+  "utf8"
+);
+const purchasePlanningSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260815042204_add_purchase_planning.sql"
   ),
   "utf8"
 );
@@ -188,6 +196,27 @@ for (const functionName of [
     `${functionName} 함수에 workspace 또는 쇼핑몰 연결 검증이 없습니다.`
   );
 }
+
+assert.match(
+  purchasePlanningSql,
+  /add column next_sale_on date[\s\S]*?add column purchase_coverage_months integer[\s\S]*?add column purchase_safety_quantity integer not null default 0/,
+  "세일 구매 계획에 필요한 열이 없습니다."
+);
+assert.match(
+  purchasePlanningSql,
+  /inventory_products_purchase_plan_pair[\s\S]*?next_sale_on is null[\s\S]*?purchase_coverage_months is null/,
+  "세일 날짜와 구매 기간의 입력 쌍 제약이 없습니다."
+);
+assert.match(
+  purchasePlanningSql,
+  /create function public\.create_inventory_product_with_stores\([\s\S]*?p_next_sale_on date[\s\S]*?p_purchase_coverage_months integer[\s\S]*?p_purchase_safety_quantity integer/,
+  "제품 생성 RPC가 세일 구매 계획을 저장하지 않습니다."
+);
+assert.match(
+  purchasePlanningSql,
+  /create function public\.update_inventory_product_with_stores\([\s\S]*?next_sale_on = p_next_sale_on[\s\S]*?purchase_coverage_months = p_purchase_coverage_months/,
+  "제품 수정 RPC가 세일 구매 계획을 저장하지 않습니다."
+);
 
 for (const functionName of [
   "create_inventory_product",

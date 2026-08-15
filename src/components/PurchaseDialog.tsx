@@ -17,7 +17,7 @@ import type {
 import { CloseIcon } from "./Icons";
 import { DateInput } from "./DateInput";
 
-export type PurchaseDialogMode = "history" | "edit";
+export type PurchaseDialogMode = "history" | "edit" | "list";
 type CommonPurchaseField = "storeId" | "packageCount" | "packageSize" | "packageUnit";
 
 interface PurchaseDialogProps {
@@ -31,6 +31,7 @@ interface PurchaseDialogProps {
   onSubmitEdit: (draft: PurchaseDraft) => Promise<void>;
   onSubmitHistory: (draft: PurchaseHistoryDraft) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
+  onEditPurchase: (purchase: InventoryPurchase) => void;
 }
 
 export function PurchaseDialog({
@@ -43,7 +44,8 @@ export function PurchaseDialog({
   onClose,
   onSubmitEdit,
   onSubmitHistory,
-  onDelete
+  onDelete,
+  onEditPurchase
 }: PurchaseDialogProps) {
   const [draft, setDraft] = useState<PurchaseDraft>(() =>
     makePurchaseDraft(product, stores, purchases, purchase)
@@ -77,6 +79,20 @@ export function PurchaseDialog({
       return 0;
     }
   }, [historyDraft.datesText]);
+  const duplicateHistoryDates = useMemo(() => {
+    if (!historyDraft.datesText.trim() || !historyDraft.storeId) return [];
+    try {
+      const dates = parsePurchaseDates(historyDraft.datesText);
+      const existingDates = new Set(
+        purchases
+          .filter((item) => item.store_id === historyDraft.storeId)
+          .map((item) => item.purchased_on)
+      );
+      return dates.filter((date) => existingDates.has(date));
+    } catch {
+      return [];
+    }
+  }, [historyDraft.datesText, historyDraft.storeId, purchases]);
 
   function updateDraft<K extends keyof PurchaseDraft>(key: K, value: PurchaseDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -101,7 +117,7 @@ export function PurchaseDialog({
     try {
       await onSubmitEdit(draft);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 수정하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매 기록을 수정하지 못했습니다.");
     }
   }
 
@@ -114,11 +130,21 @@ export function PurchaseDialog({
       return;
     }
 
+    const commonError = validateHistoryPurchaseFields(historyDraft);
+    if (commonError) {
+      setFormError(commonError);
+      return;
+    }
+    if (duplicateHistoryDates.length > 0 && !historyDraft.allowDuplicateDates) {
+      setFormError("이미 같은 날짜·쇼핑몰의 기록이 있습니다. 별도 구매가 맞다면 확인란을 선택해주세요.");
+      return;
+    }
+
     try {
       parsePurchaseDates(historyDraft.datesText);
       await onSubmitHistory(historyDraft);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 저장하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매 기록을 저장하지 못했습니다.");
     }
   }
 
@@ -133,14 +159,20 @@ export function PurchaseDialog({
     try {
       await onDelete();
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "과거 구매일을 삭제하지 못했습니다.");
+      setFormError(caught instanceof Error ? caught.message : "과거 구매 기록을 삭제하지 못했습니다.");
     }
   }
 
-  const heading = mode === "history" ? "과거 구매일 추가" : "과거 구매일 수정";
+  const heading = mode === "history"
+    ? "과거 구매 기록 추가"
+    : mode === "list"
+      ? "전체 구매 기록"
+      : "과거 구매 기록 수정";
   const description = mode === "history"
-    ? "현재 재고와 별도로 참고할 과거 구매일을 하나 또는 여러 개 입력합니다."
-    : "기존에 입력한 날짜와 상세 정보를 바로잡습니다.";
+    ? "이미 구매해 사용한 기록을 날짜·수량·용량과 함께 입력합니다."
+    : mode === "list"
+      ? "연도별 기록을 모두 확인하고 잘못 입력한 항목을 수정할 수 있습니다."
+      : "기존에 입력한 날짜와 상세 정보를 바로잡습니다.";
 
   return (
     <div
@@ -176,27 +208,21 @@ export function PurchaseDialog({
         {mode === "history" ? (
           <div className="purchase-dialog-callout">
             <strong>현재 재고는 바뀌지 않습니다.</strong>
-            <span>앞으로 물건이 들어오면 입고만 기록하면 재고와 재구매 간격에 함께 반영됩니다.</span>
+            <span>이미 모두 사용한 과거 구매량으로 월평균 소비량을 추정합니다. 앞으로 들어온 물건은 입고로 따로 기록합니다.</span>
           </div>
         ) : null}
 
         {mode === "history" ? (
           <form className="action-form" onSubmit={(event) => void submitHistory(event)}>
-            <label>
-              <span className="field-label">쇼핑몰</span>
-              <select
-                value={historyDraft.storeId}
-                onChange={(event) => updateHistoryDraft("storeId", event.target.value)}
-              >
-                <option value="">선택</option>
-                {stores.map((store) => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
-                ))}
-              </select>
-            </label>
+            <PurchaseCommonFields
+              product={product}
+              stores={stores}
+              values={historyDraft}
+              onChange={(key, value) => updateHistoryDraft(key, value)}
+            />
 
             <label>
-              <span className="field-label">과거 구매일</span>
+              <span className="field-label">구매 날짜</span>
               <textarea
                 autoFocus
                 value={historyDraft.datesText}
@@ -209,6 +235,21 @@ export function PurchaseDialog({
               </span>
             </label>
 
+            {duplicateHistoryDates.length > 0 ? (
+              <div className="duplicate-purchase-warning" role="alert">
+                <strong>같은 날짜·쇼핑몰 기록이 이미 있습니다.</strong>
+                <span>{duplicateHistoryDates.map(formatDate).join(", ")}</span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={historyDraft.allowDuplicateDates}
+                    onChange={(event) => updateHistoryDraft("allowDuplicateDates", event.target.checked)}
+                  />
+                  같은 날의 별도 구매가 맞습니다
+                </label>
+              </div>
+            ) : null}
+
             {formError ? <p className="form-error">{formError}</p> : null}
 
             <div className="dialog-actions">
@@ -220,6 +261,15 @@ export function PurchaseDialog({
               </button>
             </div>
           </form>
+        ) : mode === "list" ? (
+          <PurchaseHistoryList
+            product={product}
+            purchases={purchases}
+            stores={stores}
+            busy={busy}
+            onEdit={onEditPurchase}
+            onClose={onClose}
+          />
         ) : (
           <form className="action-form" onSubmit={(event) => void submitEdit(event)}>
             <label>
@@ -328,7 +378,7 @@ function PurchaseCommonFields({
   values: Pick<PurchaseDraft, CommonPurchaseField>;
   onChange: (key: CommonPurchaseField, value: string) => void;
 }) {
-  const purchaseUnit = product.tracking_mode === "count" ? product.unit_label : "개";
+  const purchaseUnit = product.unit_label;
 
   return (
     <>
@@ -442,8 +492,100 @@ function makeHistoryDraft(
 ): PurchaseHistoryDraft {
   return {
     storeId: defaultStoreId(product, stores, purchases),
-    datesText: ""
+    datesText: "",
+    packageCount: "1",
+    packageSize:
+      product.package_size === null || product.package_size === undefined
+        ? ""
+        : String(product.package_size),
+    packageUnit: product.capacity_unit || "",
+    allowDuplicateDates: false
   };
+}
+
+function validateHistoryPurchaseFields(values: PurchaseHistoryDraft): string | null {
+  const packageCount = Number(values.packageCount);
+  if (!Number.isInteger(packageCount) || packageCount < 1) {
+    return "구매 수량을 1 이상의 정수로 입력해주세요.";
+  }
+  const hasSize = Boolean(values.packageSize.trim());
+  const hasUnit = Boolean(values.packageUnit.trim());
+  if (hasSize !== hasUnit) return "제품 용량과 용량 단위를 함께 입력해주세요.";
+  if (hasSize && Number(values.packageSize) <= 0) return "제품 용량은 0보다 커야 합니다.";
+  return null;
+}
+
+function PurchaseHistoryList({
+  product,
+  purchases,
+  stores,
+  busy,
+  onEdit,
+  onClose
+}: {
+  product: InventoryProduct;
+  purchases: InventoryPurchase[];
+  stores: InventoryStore[];
+  busy: boolean;
+  onEdit: (purchase: InventoryPurchase) => void;
+  onClose: () => void;
+}) {
+  const storeById = new Map(stores.map((store) => [store.id, store.name]));
+  const dateCounts = purchases.reduce((counts, purchase) => {
+    counts.set(purchase.purchased_on, (counts.get(purchase.purchased_on) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const years = purchases.reduce((groups, purchase) => {
+    const year = purchase.purchased_on.slice(0, 4);
+    const list = groups.get(year) || [];
+    list.push(purchase);
+    groups.set(year, list);
+    return groups;
+  }, new Map<string, InventoryPurchase[]>());
+
+  if (purchases.length === 0) {
+    return <p className="history-empty purchase-history-empty">입력한 구매 기록이 없습니다.</p>;
+  }
+
+  return (
+    <div className="full-purchase-history">
+      <div className="full-purchase-history-summary">
+        <strong>{purchases.length}건</strong>
+        <span>총 {formatQuantity(purchases.reduce((sum, item) => sum + item.package_count, 0))}{product.unit_label}</span>
+      </div>
+      {[...years.entries()]
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([year, items]) => (
+          <section key={year} className="purchase-history-year">
+            <div className="purchase-history-year-heading">
+              <h3>{year}년</h3>
+              <span>{items.length}건 · {formatQuantity(items.reduce((sum, item) => sum + item.package_count, 0))}{product.unit_label}</span>
+            </div>
+            <ul>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <button type="button" disabled={busy} onClick={() => onEdit(item)}>
+                    <span className="purchase-history-date">
+                      {formatDate(item.purchased_on)}
+                      {(dateCounts.get(item.purchased_on) || 0) > 1 ? <small>같은 날 {dateCounts.get(item.purchased_on)}건</small> : null}
+                    </span>
+                    <span className="purchase-history-detail">
+                      <strong>{formatPurchaseAmount(item, product)}</strong>
+                      <small>{storeById.get(item.store_id) || "쇼핑몰 미확인"}</small>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      <div className="dialog-actions full-history-actions">
+        <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>
+          닫기
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function defaultStoreId(
@@ -463,7 +605,7 @@ function formatPurchaseAmount(
   purchase: InventoryPurchase,
   product: InventoryProduct
 ): string {
-  const countUnit = product.tracking_mode === "count" ? product.unit_label : "개";
+  const countUnit = product.unit_label;
   const count = `${formatQuantity(purchase.package_count)}${countUnit}`;
   if (purchase.package_size === null || !purchase.package_unit) return count;
   return `${count} · ${formatQuantity(purchase.package_size)}${purchase.package_unit}씩`;

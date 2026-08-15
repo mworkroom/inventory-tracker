@@ -7,6 +7,7 @@ import type {
   UsageCycle
 } from "../../types";
 import {
+  calculateConsumptionStats,
   calculateStockCheckUsage,
   calculatePurchaseStats,
   estimateProduct,
@@ -42,6 +43,9 @@ const baseProduct: InventoryProduct = {
   active_opened_on: null,
   active_consumer_count: null,
   preferred_store_id: null,
+  next_sale_on: null,
+  purchase_coverage_months: null,
+  purchase_safety_quantity: 0,
   notes: null,
   is_archived: false,
   created_by: null,
@@ -319,17 +323,92 @@ test("같은 날 여러 번 산 기록은 구매 간격 날짜 하나로 계산�
   assert.equal(stats.medianIntervalDays, 31);
 });
 
-test("앞으로의 입고일을 재구매 간격에 포함하고 같은 날 과거 구매일과 중복 계산하지 않는다", () => {
+test("실제 구매일과 입고일은 별도로 집계한다", () => {
   const stats = calculatePurchaseStats(
     "product-1",
     [purchase("2025-01-01"), purchase("2025-02-01")],
     [intakeEvent("2025-02-01"), intakeEvent("2025-03-01")],
     "2025-03-02"
   );
-  assert.equal(stats.purchaseDateCount, 3);
-  assert.equal(stats.medianIntervalDays, 29.5);
-  assert.equal(stats.lastPurchasedOn, "2025-03-01");
-  assert.equal(stats.nextPurchaseDate, "2025-03-31");
+  assert.equal(stats.purchaseRecordCount, 2);
+  assert.equal(stats.purchaseDateCount, 2);
+  assert.equal(stats.medianIntervalDays, 31);
+  assert.equal(stats.lastPurchasedOn, "2025-02-01");
+  assert.equal(stats.latestIntakeOn, "2025-03-01");
+  assert.equal(stats.latestIntakeQuantity, 1);
+  assert.equal(stats.nextPurchaseDate, "2025-03-04");
+});
+
+test("과거 구매 수량과 제품 용량으로 월평균 소비량을 추정한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    name: "허블룸 콤부차 세럼",
+    package_size: 50,
+    capacity_unit: "ml",
+    current_quantity: 2
+  };
+  const purchases = [
+    purchase("2022-10-02", { package_size: null, package_unit: null }),
+    purchase("2023-07-06", { id: "2023-a", package_size: null, package_unit: null }),
+    purchase("2023-07-06", { id: "2023-b", package_size: null, package_unit: null }),
+    purchase("2023-11-23", { package_count: 2, package_size: 50, package_unit: "ml" }),
+    purchase("2024-04-05", { package_count: 2, package_size: 50, package_unit: "ml" }),
+    purchase("2024-04-11", { package_size: null, package_unit: null }),
+    purchase("2024-10-25", { package_count: 4, package_size: 50, package_unit: "ml" }),
+    purchase("2025-11-13", { package_count: 4, package_size: 50, package_unit: "ml" })
+  ];
+  const events = [intakeEvent("2026-04-03", 2)];
+  const estimate = estimateProduct(product, events, [], "2026-08-15");
+  const stats = calculateConsumptionStats(
+    product,
+    purchases,
+    events,
+    estimate,
+    "2026-08-15"
+  );
+
+  assert.equal(stats.source, "purchase");
+  assert.equal(stats.observationDays, 1279);
+  assert.equal(stats.sampleCount, 8);
+  assert.equal(stats.inferredSizeRecordCount, 4);
+  assert.ok(Math.abs((stats.monthlyAmount || 0) - 19.038) < 0.01);
+  assert.ok(Math.abs((stats.annualAmount || 0) - 228.456) < 0.02);
+});
+
+test("실제 사용 주기가 있으면 과거 구매량보다 우선한다", () => {
+  const estimate = estimateProduct(baseProduct, [], [cycle()], "2026-07-19");
+  const stats = calculateConsumptionStats(
+    baseProduct,
+    [purchase("2024-01-01", { package_count: 20 })],
+    [],
+    estimate,
+    "2026-07-19"
+  );
+
+  assert.equal(stats.source, "usage");
+  assert.equal(stats.sampleCount, 1);
+  assert.ok(Math.abs((stats.monthlyAmount || 0) - 320.3947) < 0.01);
+});
+
+test("세일 날짜의 예상 재고를 빼고 여유 재고를 더해 추천 구매 수량을 계산한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    package_size: 50,
+    capacity_unit: "ml",
+    current_quantity: 2,
+    next_sale_on: "2026-11-27",
+    purchase_coverage_months: 12,
+    purchase_safety_quantity: 1
+  };
+  const purchases = [
+    purchase("2022-10-02", { package_count: 16, package_size: 50, package_unit: "ml" })
+  ];
+  const events = [intakeEvent("2026-04-03", 2)];
+  const estimate = estimateProduct(product, events, [], "2026-08-15");
+  const stats = calculateConsumptionStats(product, purchases, events, estimate, "2026-08-15");
+
+  assert.equal(stats.recommendedPurchaseQuantity, 5);
+  assert.ok(Math.abs((stats.expectedStockOnSaleDate || 0) - 0.699) < 0.02);
 });
 
 test("미국식 날짜 입력은 ISO로 정규화하고 화면에는 미국식으로 표시한다", () => {

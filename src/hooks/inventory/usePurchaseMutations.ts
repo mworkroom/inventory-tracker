@@ -10,11 +10,12 @@ import type {
   PurchaseDraft
 } from "../../types";
 import type { InventoryRefresh, RunInventoryMutation } from "./types";
-import { buildPurchasePayload } from "./validation";
+import { buildPurchaseCommonPayload, buildPurchasePayload } from "./validation";
 
 interface PurchaseMutationOptions {
   products: InventoryProduct[];
   stores: InventoryStore[];
+  purchases: InventoryPurchase[];
   userId: string;
   refresh: InventoryRefresh;
   runMutation: RunInventoryMutation;
@@ -23,6 +24,7 @@ interface PurchaseMutationOptions {
 export function usePurchaseMutations({
   products,
   stores,
+  purchases,
   userId,
   refresh,
   runMutation
@@ -34,28 +36,44 @@ export function usePurchaseMutations({
         const dates = parsePurchaseDates(draft.datesText);
         const storeId = draft.storeId;
         if (!stores.some((store) => store.id === storeId)) {
-          throw new Error("과거 구매일을 저장할 쇼핑몰을 선택해주세요.");
+          throw new Error("과거 구매 기록을 저장할 쇼핑몰을 선택해주세요.");
         }
+        const duplicateDates = dates.filter((date) =>
+          purchases.some(
+            (purchase) =>
+              purchase.product_id === product.id &&
+              purchase.store_id === storeId &&
+              purchase.purchased_on === date
+          )
+        );
+        if (duplicateDates.length > 0 && !draft.allowDuplicateDates) {
+          throw new Error(
+            "이미 같은 날짜·쇼핑몰의 기록이 있습니다. 별도 구매 확인 후 다시 저장해주세요."
+          );
+        }
+        const commonPayload = buildPurchaseCommonPayload(
+          product,
+          {
+            storeId,
+            packageCount: draft.packageCount,
+            packageSize: draft.packageSize,
+            packageUnit: draft.packageUnit,
+            note: ""
+          },
+          userId
+        );
         const rows = dates.map((purchasedOn) => ({
-          workspace_id: WORKSPACE_ID,
-          product_id: product.id,
-          store_id: storeId,
+          ...commonPayload,
           purchased_on: purchasedOn,
-          package_count: 1,
-          package_size: null,
-          package_unit: null,
           total_price: null,
-          shipping_fee: null,
-          note: null,
-          created_by: userId,
-          updated_by: userId
+          shipping_fee: null
         }));
         const { error } = await supabase.from("inventory_purchases").insert(rows);
         if (error) throw error;
         await refresh(true);
         return dates.length;
       }),
-    [refresh, runMutation, stores, userId]
+    [purchases, refresh, runMutation, stores, userId]
   );
 
   const updatePurchase = useCallback(

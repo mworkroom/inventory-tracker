@@ -10,6 +10,7 @@ import {
 } from "../lib/inventory";
 import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
+  ConsumptionStats,
   InventoryAction,
   InventoryEvent,
   InventoryProduct,
@@ -25,6 +26,7 @@ interface ProductCardProps {
   product: InventoryProduct;
   estimate: ProductEstimate;
   purchaseStats: PurchaseStats;
+  consumptionStats: ConsumptionStats;
   events: InventoryEvent[];
   cycles: UsageCycle[];
   purchases: InventoryPurchase[];
@@ -36,6 +38,7 @@ interface ProductCardProps {
   onActiveUsageEdit: () => void;
   onEdit: () => void;
   onPurchaseHistoryAdd: () => void;
+  onPurchaseHistoryView: () => void;
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
   onUsageCycleEdit: (cycle: UsageCycle) => void;
   onEventAmountEdit: (event: InventoryEvent) => void;
@@ -45,6 +48,7 @@ export function ProductCard({
   product,
   estimate,
   purchaseStats,
+  consumptionStats,
   events,
   cycles,
   purchases,
@@ -56,6 +60,7 @@ export function ProductCard({
   onActiveUsageEdit,
   onEdit,
   onPurchaseHistoryAdd,
+  onPurchaseHistoryView,
   onPurchaseEdit,
   onUsageCycleEdit,
   onEventAmountEdit
@@ -93,7 +98,7 @@ export function ProductCard({
   const productCycles = cycles
     .filter((cycle) => cycle.product_id === product.id)
     .slice(0, 3);
-  const recentPurchases = purchases.slice(0, 5);
+  const recentPurchases = purchases.slice(0, 3);
   const storeById = new Map(stores.map((store) => [store.id, store]));
   const shoppingMallNames = getProductStoreIds(product)
     .map((storeId) => storeById.get(storeId)?.name || "쇼핑몰 미확인");
@@ -136,8 +141,10 @@ export function ProductCard({
     ? `재고가 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
     : inventoryAttentionKind === "usage" && estimate.remainingDays !== null
       ? `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
-      : repurchaseDue && purchaseStats.nextPurchaseDate
-        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)}`
+      : repurchaseDue && (product.next_sale_on || purchaseStats.nextPurchaseDate)
+        ? product.next_sale_on
+          ? `다음 세일 ${formatDate(product.next_sale_on)}에 맞춰 구매를 준비할 시기입니다.`
+          : `${formatPurchaseForecast(purchaseStats.nextPurchaseDate!, purchaseStats.daysUntilNextPurchase)}`
         : stockInitialized
           ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
             ? `사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
@@ -266,47 +273,80 @@ export function ProductCard({
           <section className="forecast-section purchase-forecast-section">
             <div className="forecast-section-heading">
               <div>
-                <h3>재구매 간격 기준</h3>
+                <h3>구매·소비 통계</h3>
               </div>
               <span className={`forecast-status ${repurchaseDue ? "repurchase" : "neutral"}`}>
-                {repurchaseDue
-                  ? "재구매 시기"
-                  : purchaseStats.nextPurchaseDate
-                    ? "예상일 있음"
-                    : "재구매 간격 학습 전"}
+                {consumptionStats.source === "usage"
+                  ? "실제 사용 기록 기준"
+                  : consumptionStats.source === "purchase"
+                    ? "과거 구매량 기준"
+                    : "소비량 학습 전"}
               </span>
             </div>
             <dl className="product-info forecast-info">
               <InfoRow
-                label="최근 구매일"
+                label="구매 기록"
                 value={
-                  purchaseStats.purchaseDateCount > 0
-                    ? `${purchaseStats.purchaseDateCount}개 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
+                  purchaseStats.purchaseRecordCount > 0
+                    ? `${purchaseStats.purchaseRecordCount}건 · 총 ${formatQuantity(purchaseStats.totalPackageCount)}${product.unit_label}`
                     : "아직 없음"
                 }
               />
               <InfoRow
-                label="재구매 간격"
+                label="최근 실제 구매"
                 value={
-                  purchaseStats.medianIntervalDays === null
-                    ? purchaseStats.purchaseDateCount > 0
-                      ? "날짜가 2개 이상 필요함"
-                      : "과거 구매일을 입력하거나 입고하면 계산"
-                    : `${formatApproxDays(purchaseStats.medianIntervalDays)} · 간격 ${purchaseStats.intervalSampleCount}개 기준`
+                  purchaseStats.lastPurchasedOn && purchaseStats.lastPurchasePackageCount !== null
+                    ? `${formatDate(purchaseStats.lastPurchasedOn)} · ${formatQuantity(purchaseStats.lastPurchasePackageCount)}${product.unit_label}`
+                    : "아직 없음"
                 }
               />
               <InfoRow
-                label="재구매 예상일"
+                label="최근 입고"
                 value={
-                  purchaseStats.nextPurchaseDate
-                    ? formatPurchaseForecast(
-                        purchaseStats.nextPurchaseDate,
-                        purchaseStats.daysUntilNextPurchase
-                      )
-                    : "과거 구매일·입고일 합계 2개부터 계산"
+                  purchaseStats.latestIntakeOn && purchaseStats.latestIntakeQuantity !== null
+                    ? `${formatDate(purchaseStats.latestIntakeOn)} · ${formatQuantity(purchaseStats.latestIntakeQuantity)}${product.unit_label}`
+                    : "아직 없음"
+                }
+              />
+              <InfoRow
+                label="월평균 소비량"
+                value={formatConsumptionAmount(consumptionStats, product.unit_label)}
+              />
+              <InfoRow
+                label="1년 예상 필요량"
+                value={
+                  consumptionStats.annualAmount !== null && consumptionStats.monthlyUnit
+                    ? `약 ${formatDecimal(consumptionStats.annualAmount)}${consumptionStats.monthlyUnit}`
+                    : "소비량을 계산할 기록이 더 필요함"
+                }
+              />
+              {product.next_sale_on && product.purchase_coverage_months ? (
+                <InfoRow
+                  label="다음 세일 구매 추천"
+                  value={
+                    consumptionStats.recommendedPurchaseQuantity === null
+                      ? `${formatDate(product.next_sale_on)} · 소비량을 계산한 뒤 추천`
+                      : `${formatDate(product.next_sale_on)} · ${product.purchase_coverage_months}개월치 ${consumptionStats.recommendedPurchaseQuantity}${product.unit_label}`
+                  }
+                />
+              ) : null}
+              <InfoRow
+                label="구매 간격 · 참고"
+                value={
+                  purchaseStats.medianIntervalDays === null
+                    ? "서로 다른 실제 구매일 2개부터 계산"
+                    : `${formatApproxDays(purchaseStats.medianIntervalDays)} · ${purchaseStats.intervalSampleCount}개 간격 기준`
                 }
               />
             </dl>
+            {consumptionStats.source === "purchase" ? (
+              <p className="forecast-method-note">
+                현재 재고 추적을 시작하기 전 구매 기록은 모두 사용한 것으로 보고 계산했습니다.
+                {consumptionStats.inferredSizeRecordCount > 0
+                  ? ` 용량이 비어 있던 ${consumptionStats.inferredSizeRecordCount}건은 현재 제품 용량을 적용했습니다.`
+                  : ""}
+              </p>
+            ) : null}
           </section>
 
           <div className={`quick-actions ${isCycle ? "cycle-actions" : "count-actions"}`} aria-label={`${product.name} 빠른 기록`}>
@@ -367,8 +407,8 @@ export function ProductCard({
           <p className="inventory-action-note">
             {isCycle
               ? stockInitialized
-                ? "입고하면 통·병·봉 개수가 늘고, 그 날짜가 재구매 간격에도 반영됩니다. 다 쓰면 현재 제품 1개가 재고에서 빠집니다."
-                : "첫 입고부터 재고와 재구매 간격 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."
+                ? "입고하면 통·병·봉 개수가 늘고, 다 쓰면 현재 제품 1개가 재고에서 빠집니다. 구매 기록과 입고 기록은 따로 표시됩니다."
+                : "첫 입고부터 재고 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."
               : stockInitialized
                 ? "사용량을 알면 사용 기록, 실제 잔량만 알면 지금 남은 수량 확인, 입력 실수는 재고 정정을 사용합니다."
                 : "첫 입고를 기록하거나 지금 가진 수량을 현재 재고로 설정하면 계산을 시작합니다."}
@@ -380,7 +420,7 @@ export function ProductCard({
             disabled={busy}
             onClick={onPurchaseHistoryAdd}
           >
-            과거 구매일 추가
+            과거 구매 기록 추가
           </button>
  
 
@@ -426,8 +466,10 @@ export function ProductCard({
 
           <section className="purchase-history-section">
             <div className="section-heading">
-              <h3>과거 구매일</h3>
-              <span>{purchases.length}개</span>
+              <h3>과거 구매 기록</h3>
+              <span>
+                {purchases.length}건 · 총 {formatQuantity(purchaseStats.totalPackageCount)}{product.unit_label}
+              </span>
             </div>
             {recentPurchases.length ? (
               <ul className="purchase-history-list">
@@ -437,6 +479,7 @@ export function ProductCard({
                     <li key={purchase.id}>
                       <button type="button" disabled={busy} onClick={() => onPurchaseEdit(purchase)}>
                         <span>{formatDate(purchase.purchased_on)}</span>
+                        <strong>{formatQuantity(purchase.package_count)}{product.unit_label}</strong>
                         {storeName !== "기타" ? <small>{storeName}</small> : null}
                       </button>
                     </li>
@@ -444,8 +487,21 @@ export function ProductCard({
                 })}
               </ul>
             ) : (
-              <p className="history-empty">입력한 과거 구매일이 없습니다.</p>
+              <p className="history-empty">입력한 과거 구매 기록이 없습니다.</p>
             )}
+            {purchases.length > 0 ? (
+              <button
+                type="button"
+                className="full-history-button"
+                disabled={busy}
+                onClick={onPurchaseHistoryView}
+              >
+                전체 {purchases.length}건 보기
+                {purchaseStats.firstPurchasedOn && purchaseStats.lastPurchasedOn
+                  ? ` · ${formatHistoryRange(purchaseStats.firstPurchasedOn, purchaseStats.lastPurchasedOn)}`
+                  : ""}
+              </button>
+            ) : null}
           </section>
 
           {isCycle ? (
@@ -516,6 +572,31 @@ function formatActiveMeta(product: InventoryProduct): string {
 
 function formatDecimal(value: number): string {
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatConsumptionAmount(
+  stats: ConsumptionStats,
+  packageUnit: string
+): string {
+  if (stats.monthlyAmount === null || !stats.monthlyUnit) {
+    return "완료된 사용 주기 또는 충분한 과거 구매량이 필요함";
+  }
+  const base = `약 ${formatDecimal(stats.monthlyAmount)}${stats.monthlyUnit}/월`;
+  if (
+    stats.monthlyPackageCount !== null &&
+    Math.abs(stats.monthlyPackageCount - stats.monthlyAmount) > 0.000001
+  ) {
+    return `${base} · 약 ${formatDecimal(stats.monthlyPackageCount)}${packageUnit}/월`;
+  }
+  return base;
+}
+
+function formatHistoryRange(first: string, last: string): string {
+  const compact = (iso: string) => {
+    const [year, month] = iso.split("-");
+    return `${year}.${month}`;
+  };
+  return `${compact(first)}–${compact(last)}`;
 }
 
 function formatPurchaseForecast(

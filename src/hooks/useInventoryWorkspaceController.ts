@@ -108,7 +108,7 @@ export function useInventoryWorkspaceController(userId: string) {
       !purchaseState.purchase
     ) return;
     await inventory.updatePurchase(purchaseState.purchase, draft);
-    showToast("과거 구매일을 수정했습니다.");
+    showToast("과거 구매 기록을 수정했습니다.");
     setExpandedId(purchaseState.product.id);
     setPurchaseState(null);
   }
@@ -121,7 +121,7 @@ export function useInventoryWorkspaceController(userId: string) {
     );
     setExpandedId(purchaseState.product.id);
     setPurchaseState(null);
-    showToast(`과거 구매일 ${count}개를 저장했습니다.`);
+    showToast(`과거 구매 기록 ${count}건을 저장했습니다.`);
   }
 
   async function saveUsageCycle(draft: UsageCycleDraft) {
@@ -169,7 +169,7 @@ export function useInventoryWorkspaceController(userId: string) {
     await inventory.deletePurchase(purchaseState.purchase);
     setExpandedId(productId);
     setPurchaseState(null);
-    showToast("과거 구매일을 삭제했습니다.");
+    showToast("과거 구매 기록을 삭제했습니다.");
   }
 
   async function archiveEditedProduct() {

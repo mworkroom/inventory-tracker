@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { InventoryWorkspaceController } from "../hooks/useInventoryWorkspaceController";
 import type { InventoryViewModel } from "../hooks/useInventoryViewModel";
 import {
+  calculateConsumptionStats,
   calculatePurchaseStats,
   estimateProduct,
   isInventoryAttentionNeeded
@@ -44,6 +45,15 @@ export function InventoryList({
           view.purchaseStats.get(product.id) ||
           calculatePurchaseStats(product.id, [], [])
         }
+        consumptionStats={
+          view.consumptionStats.get(product.id) ||
+          calculateConsumptionStats(
+            product,
+            [],
+            [],
+            estimateProduct(product, [], [])
+          )
+        }
         events={inventory.events}
         cycles={inventory.cycles}
         purchases={view.purchasesByProduct.get(product.id) || []}
@@ -66,6 +76,13 @@ export function InventoryList({
           controller.setPurchaseState({
             product,
             mode: "history",
+            purchase: null
+          })
+        }
+        onPurchaseHistoryView={() =>
+          controller.setPurchaseState({
+            product,
+            mode: "list",
             purchase: null
           })
         }

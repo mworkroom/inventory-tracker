@@ -46,6 +46,9 @@ export interface InventoryProduct {
   active_consumer_count: number | null;
   preferred_store_id: string | null;
   store_ids?: string[];
+  next_sale_on: string | null;
+  purchase_coverage_months: number | null;
+  purchase_safety_quantity: number;
   notes: string | null;
   is_archived: boolean;
   created_by: string | null;
@@ -111,6 +114,9 @@ export interface ProductDraft {
   packageSize: string;
   capacityUnit: string;
   storeIds: string[];
+  nextSaleOn: string;
+  purchaseCoverageMonths: string;
+  purchaseSafetyQuantity: string;
   notes: string;
 }
 
@@ -149,6 +155,10 @@ export interface PurchaseDraft {
 export interface PurchaseHistoryDraft {
   storeId: string;
   datesText: string;
+  packageCount: string;
+  packageSize: string;
+  packageUnit: string;
+  allowDuplicateDates: boolean;
 }
 
 export interface ProductEstimate {
@@ -166,10 +176,30 @@ export interface ProductEstimate {
 }
 
 export interface PurchaseStats {
+  purchaseRecordCount: number;
   purchaseDateCount: number;
+  totalPackageCount: number;
   intervalSampleCount: number;
   medianIntervalDays: number | null;
+  firstPurchasedOn: string | null;
   lastPurchasedOn: string | null;
+  lastPurchasePackageCount: number | null;
+  latestIntakeOn: string | null;
+  latestIntakeQuantity: number | null;
   nextPurchaseDate: string | null;
   daysUntilNextPurchase: number | null;
+}
+
+export interface ConsumptionStats {
+  source: "usage" | "purchase" | null;
+  monthlyAmount: number | null;
+  monthlyUnit: string | null;
+  monthlyPackageCount: number | null;
+  annualAmount: number | null;
+  sampleCount: number;
+  observationDays: number | null;
+  inferredSizeRecordCount: number;
+  excludedSizeRecordCount: number;
+  recommendedPurchaseQuantity: number | null;
+  expectedStockOnSaleDate: number | null;
 }

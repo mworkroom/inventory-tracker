@@ -24,7 +24,10 @@ export function buildPurchasePayload(
 
 export function buildPurchaseCommonPayload(
   product: InventoryProduct,
-  draft: PurchaseDraft,
+  draft: Pick<
+    PurchaseDraft,
+    "storeId" | "packageCount" | "packageSize" | "packageUnit"
+  > & { note?: string },
   userId: string
 ) {
   if (!draft.storeId) throw new Error("쇼핑몰을 선택해주세요.");
@@ -44,7 +47,7 @@ export function buildPurchaseCommonPayload(
     package_count: packageCount,
     package_size: packageSize,
     package_unit: packageUnit,
-    note: draft.note.trim() || null,
+    note: draft.note?.trim() || null,
     created_by: userId,
     updated_by: userId
   };

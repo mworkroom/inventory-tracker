@@ -1,12 +1,30 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(29);
 
 select has_table(
   'public',
   'inventory_products',
   'blank rebuild creates inventory_products'
+);
+select has_column(
+  'public',
+  'inventory_products',
+  'next_sale_on',
+  'inventory products store an optional next sale date'
+);
+select has_column(
+  'public',
+  'inventory_products',
+  'purchase_coverage_months',
+  'inventory products store optional purchase coverage months'
+);
+select has_column(
+  'public',
+  'inventory_products',
+  'purchase_safety_quantity',
+  'inventory products store purchase safety quantity'
 );
 select has_table(
   'public',
@@ -116,7 +134,10 @@ select lives_ok(
         where name in ('쿠팡', '마켓컬리')
         order by sort_order
       ),
-      p_category := '식료품'
+      p_category := '식료품',
+      p_next_sale_on := '2026-11-27'::date,
+      p_purchase_coverage_months := 12,
+      p_purchase_safety_quantity := 1
     )
   $$,
   'a workspace member can create a product through the RPC'
@@ -129,6 +150,15 @@ select results_eq(
   $$,
   $$ values (0::numeric, false) $$,
   'product creation does not invent dated stock history'
+);
+select results_eq(
+  $$
+    select next_sale_on, purchase_coverage_months, purchase_safety_quantity
+    from public.inventory_products
+    where name = '대패삼겹'
+  $$,
+  $$ values ('2026-11-27'::date, 12::integer, 1::integer) $$,
+  'product creation persists the optional sale purchase plan'
 );
 select results_eq(
   $$
@@ -191,7 +221,10 @@ select lives_ok(
           where name = '마켓컬리'
         )
       ],
-      p_category := '식료품'
+      p_category := '식료품',
+      p_next_sale_on := null,
+      p_purchase_coverage_months := null,
+      p_purchase_safety_quantity := 0
     )
   $$,
   'a workspace member can update product details and shopping malls atomically'

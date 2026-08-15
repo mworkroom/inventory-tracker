@@ -279,10 +279,10 @@ function getActionContent(action: InventoryAction, product: InventoryProduct) {
       return {
         title: "입고 기록",
         description: !stockInitialized
-          ? `이 입고를 첫 재고 기록으로 삼아 0${product.unit_label}에서 계산을 시작하고, 입고일을 재구매 간격에도 반영합니다.`
+          ? `이 입고를 첫 재고 기록으로 삼아 0${product.unit_label}에서 재고 계산을 시작합니다.`
           : isCycle
-            ? `새로 도착한 ${product.unit_label} 개수를 현재 재고에 더하고, 입고일을 재구매 간격에도 반영합니다.`
-            : "새로 도착한 실제 수량을 현재 재고에 더하고, 입고일을 재구매 간격에도 반영합니다.",
+            ? `새로 도착한 ${product.unit_label} 개수를 현재 재고에 더합니다.`
+            : "새로 도착한 실제 수량을 현재 재고에 더합니다.",
         submitLabel: "입고 기록"
       };
     case "use":

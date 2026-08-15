@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { PRODUCT_CATEGORIES } from "../types";
 import { CloseIcon } from "./Icons";
+import { DateInput } from "./DateInput";
 
 interface ProductEditorProps {
   product: InventoryProduct | null;
@@ -124,6 +125,25 @@ export function ProductEditor({
         setFormError("개봉일과 다 쓴 날만 기록하는 제품의 재고 알림 수량은 정수로 입력해주세요.");
         return;
       }
+    }
+
+    const hasSaleDate = Boolean(draft.nextSaleOn);
+    const hasCoverage = Boolean(draft.purchaseCoverageMonths.trim());
+    if (hasSaleDate !== hasCoverage) {
+      setFormError("다음 세일 날짜와 몇 개월치를 살지 함께 입력해주세요.");
+      return;
+    }
+    if (hasCoverage) {
+      const coverageMonths = Number(draft.purchaseCoverageMonths);
+      if (!Number.isInteger(coverageMonths) || coverageMonths < 1 || coverageMonths > 36) {
+        setFormError("구매할 기간은 1~36개월 사이의 정수로 입력해주세요.");
+        return;
+      }
+    }
+    const safetyQuantity = Number(draft.purchaseSafetyQuantity);
+    if (!Number.isInteger(safetyQuantity) || safetyQuantity < 0) {
+      setFormError("여유 재고는 0 이상의 정수로 입력해주세요.");
+      return;
     }
 
     try {
@@ -254,7 +274,7 @@ export function ProductEditor({
                   </button>
                 ))}
               </div>
- 
+
             </div>
           </section>
 
@@ -373,6 +393,53 @@ export function ProductEditor({
             </p>
           </section>
 
+          <section className="form-section purchase-plan-form-section">
+            <div className="form-section-heading-copy">
+              <h3>세일 구매 계획 · 선택</h3>
+              <p>정기 세일 때 몇 개를 살지 월평균 소비량과 현재 재고로 계산합니다.</p>
+            </div>
+            <div className="form-grid three-columns">
+              <label>
+                <span className="field-label">다음 세일 날짜</span>
+                <DateInput
+                  value={draft.nextSaleOn}
+                  onChange={(value) => update("nextSaleOn", value)}
+                />
+              </label>
+              <label>
+                <span className="field-label">몇 개월치 구매?</span>
+                <div className="input-with-unit">
+                  <input
+                    type="number"
+                    min="1"
+                    max="36"
+                    step="1"
+                    value={draft.purchaseCoverageMonths}
+                    placeholder="예: 12"
+                    onChange={(event) => update("purchaseCoverageMonths", event.target.value)}
+                  />
+                  <span>개월</span>
+                </div>
+              </label>
+              <label>
+                <span className="field-label">여유 재고</span>
+                <div className="input-with-unit">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={draft.purchaseSafetyQuantity}
+                    onChange={(event) => update("purchaseSafetyQuantity", event.target.value)}
+                  />
+                  <span>{draft.unitLabel || "개"}</span>
+                </div>
+              </label>
+            </div>
+            <p className="field-hint">
+              구매 유형을 따로 고르지 않아도 됩니다. 입력하지 않으면 기존 재구매 간격만 참고합니다.
+            </p>
+          </section>
+
           <label className="form-section compact-section">
             <span className="field-label">메모 · 선택</span>
             <textarea
@@ -397,7 +464,7 @@ export function ProductEditor({
             <section className="product-management-section">
               <div className="product-management-heading">
                 <h3>제품 관리</h3>
-                <p>기록은 남겨두고 기본 목록에서만 숨길 수 있습니다.</p>
+
               </div>
 
               <div className="product-management-action">
@@ -454,7 +521,7 @@ function ReadOnlyQuantity({ product }: { product: InventoryProduct | null }) {
           ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
           : "재고 미설정"}
       </strong>
-      <small>수량은 카드의 ‘현재 재고 설정’ 또는 ‘재고 정정’에서 바꿉니다.</small>
+
     </div>
   );
 }
@@ -508,6 +575,13 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
         : String(product.package_size),
     capacityUnit: product?.capacity_unit || "",
     storeIds: product ? getProductStoreIds(product) : [],
+    nextSaleOn: product?.next_sale_on || "",
+    purchaseCoverageMonths:
+      product?.purchase_coverage_months === null ||
+      product?.purchase_coverage_months === undefined
+        ? ""
+        : String(product.purchase_coverage_months),
+    purchaseSafetyQuantity: String(product?.purchase_safety_quantity ?? 0),
     notes: product?.notes || ""
   };
 }

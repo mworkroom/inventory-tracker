@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  calculateConsumptionStats,
   calculatePurchaseStats,
   estimateProduct,
   getInventoryAttentionKind,
@@ -13,6 +14,7 @@ import type {
   InventoryPurchase,
   InventoryStore,
   InventoryViewMode,
+  ConsumptionStats,
   ProductEstimate,
   PurchaseStats
 } from "../types";
@@ -73,6 +75,22 @@ export function useInventoryViewModel({
     });
     return result;
   }, [inventory.cycles, inventory.events, inventory.products, purchaseStats]);
+
+  const consumptionStats = useMemo(() => {
+    const result = new Map<string, ConsumptionStats>();
+    inventory.products.forEach((product) => {
+      result.set(
+        product.id,
+        calculateConsumptionStats(
+          product,
+          inventory.purchases,
+          inventory.events,
+          estimates.get(product.id) || estimateProduct(product, [], [])
+        )
+      );
+    });
+    return result;
+  }, [estimates, inventory.events, inventory.products, inventory.purchases]);
 
   const purchasesByProduct = useMemo(() => {
     const result = new Map<string, InventoryPurchase[]>();
@@ -139,6 +157,7 @@ export function useInventoryViewModel({
   return {
     storeById,
     purchaseStats,
+    consumptionStats,
     estimates,
     purchasesByProduct,
     counts,
