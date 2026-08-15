@@ -309,7 +309,7 @@
   }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 420px) {
   .dialog-actions.event-edit-actions {
     grid-template-columns: 1fr;
   }
