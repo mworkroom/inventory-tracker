@@ -109,10 +109,6 @@
   text-align: left;
 }
 
-.store-group-heading button:hover {
-  background: #f7f9fa;
-}
-
 .store-group-label {
   display: flex;
   min-width: 0;
