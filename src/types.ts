@@ -167,7 +167,7 @@ export interface ProductEstimate {
   isUrgent: boolean;
   urgentReason: string | null;
   isLearning: boolean;
-  forecastSource: "usage" | "purchase" | null;
+  forecastSource: "usage" | "purchase_volume" | "purchase_interval" | null;
   remainingDays: number | null;
   estimatedOutDate: string | null;
   expectedCycleDays: number | null;

@@ -107,7 +107,12 @@ export function ProductCard({
     ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
     : "재고 미설정";
   const inventoryAttentionKind = getInventoryAttentionKind(product, estimate);
-  const repurchaseDue = isRepurchaseDue(product, purchaseStats);
+  const repurchaseDue = isRepurchaseDue(product, purchaseStats, estimate);
+  const hasDepletionForecast =
+    estimate.forecastSource === "usage" ||
+    estimate.forecastSource === "purchase_volume";
+  const isPurchaseVolumeForecast =
+    estimate.forecastSource === "purchase_volume";
   const statusClass = inventoryAttentionKind
     ? "urgent"
     : repurchaseDue
@@ -117,7 +122,7 @@ export function ProductCard({
         : "unknown";
   const statusLabel = inventoryAttentionKind === "quantity"
     ? "재고 확인"
-    : inventoryAttentionKind === "usage"
+    : inventoryAttentionKind === "depletion"
       ? "소진 임박"
       : repurchaseDue
         ? "재구매 시기"
@@ -126,7 +131,7 @@ export function ProductCard({
           : "재고 미설정";
   const statusTitle = inventoryAttentionKind === "quantity"
     ? "재고가 얼마 안 남았어요"
-    : inventoryAttentionKind === "usage"
+    : inventoryAttentionKind === "depletion"
       ? "거의 다 써가요"
       : repurchaseDue
         ? "재구매할 때가 됐어요"
@@ -135,15 +140,19 @@ export function ProductCard({
           : "재고를 설정해 주세요";
   const statusDescription = inventoryAttentionKind === "quantity"
     ? `재고가 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
-    : inventoryAttentionKind === "usage" && estimate.remainingDays !== null
-      ? `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
+    : inventoryAttentionKind === "depletion" && estimate.remainingDays !== null
+      ? isPurchaseVolumeForecast
+        ? `과거 구매량으로 추정하면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
+        : `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
       : repurchaseDue && (product.next_sale_on || purchaseStats.nextPurchaseDate)
         ? product.next_sale_on
           ? `다음 세일 ${formatDate(product.next_sale_on)}에 맞춰 구매를 준비할 시기입니다.`
           : formatPurchaseForecast(purchaseStats.nextPurchaseDate!, purchaseStats.daysUntilNextPurchase)
         : stockInitialized
-          ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
-            ? `사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
+          ? hasDepletionForecast && estimate.remainingDays !== null
+            ? isPurchaseVolumeForecast
+              ? `과거 구매량 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
+              : `사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
             : isCycle
               ? "개봉일과 다 쓴 날 기록을 쌓으면 실제 사용 기간을 계산합니다."
               : "서로 다른 날짜의 사용 기록을 쌓으면 실제 사용 속도를 계산합니다."

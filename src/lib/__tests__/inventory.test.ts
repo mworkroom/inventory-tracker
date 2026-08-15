@@ -8,6 +8,7 @@ import type {
 } from "../../types";
 import {
   calculateConsumptionStats,
+  calculateProductAnalysis,
   calculateStockCheckUsage,
   calculatePurchaseStats,
   estimateProduct,
@@ -291,7 +292,7 @@ test("사용 기록이 없으면 과거 구매 간격을 임시 예상으로 사
     "2025-07-20",
     stats
   );
-  assert.equal(estimate.forecastSource, "purchase");
+  assert.equal(estimate.forecastSource, "purchase_interval");
   assert.equal(estimate.estimatedOutDate, "2025-11-18");
   assert.equal(estimate.remainingDays, 121);
   assert.equal(estimate.isUrgent, true);
@@ -384,17 +385,34 @@ test("과거 구매 수량과 제품 용량으로 월평균 소비량을 추정�
 
 test("실제 사용 주기가 있으면 과거 구매량보다 우선한다", () => {
   const estimate = estimateProduct(baseProduct, [], [cycle()], "2026-07-19");
+  const purchases = ["2024-01-01", "2024-10-01", "2025-07-01"].map(
+    (date, index) => purchase(date, {
+      id: `usage-priority-${index}`,
+      package_count: 20,
+      package_size: 1600,
+      package_unit: "ml"
+    })
+  );
   const stats = calculateConsumptionStats(
     baseProduct,
-    [purchase("2024-01-01", { package_count: 20 })],
+    purchases,
     [],
     estimate,
+    "2026-07-19"
+  );
+  const analysis = calculateProductAnalysis(
+    baseProduct,
+    purchases,
+    [],
+    [cycle()],
+    null,
     "2026-07-19"
   );
 
   assert.equal(stats.source, "usage");
   assert.equal(stats.sampleCount, 1);
   assert.ok(Math.abs((stats.monthlyAmount || 0) - 320.3947) < 0.01);
+  assert.equal(analysis.estimate.forecastSource, "usage");
 });
 
 test("세일 날짜의 예상 재고를 빼고 여유 재고를 더해 추천 구매 수량을 계산한다", () => {
@@ -594,9 +612,9 @@ test("구매 예상일은 재고·소진 알림과 별도의 재구매 신호로
   );
   const estimate = estimateProduct(product, [], [], "2025-07-20", stats);
 
-  assert.equal(estimate.forecastSource, "purchase");
+  assert.equal(estimate.forecastSource, "purchase_interval");
   assert.equal(getInventoryAttentionKind(product, estimate), null);
-  assert.equal(isRepurchaseDue(product, stats), true);
+  assert.equal(isRepurchaseDue(product, stats, estimate), true);
   assert.equal(isInventoryAttentionNeeded(product, estimate, stats), true);
 });
 
@@ -636,7 +654,111 @@ test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분�
     "2026-07-19"
   );
   assert.equal(usageEstimate.forecastSource, "usage");
-  assert.equal(getInventoryAttentionKind(usageProduct, usageEstimate), "usage");
+  assert.equal(getInventoryAttentionKind(usageProduct, usageEstimate), "depletion");
+});
+
+test("충분한 과거 구매량이 있으면 1통 수량 기준보다 소진 예측을 우선한다", () => {
+  const product = {
+    ...baseProduct,
+    name: "더랩 히알루론산 토너",
+    package_size: 500,
+    capacity_unit: "ml",
+    current_quantity: 1,
+    low_stock_threshold: 1,
+    alert_days: 30
+  };
+  const purchases = ["2024-01-01", "2024-09-01", "2025-05-01"].map(
+    (date, index) => purchase(date, {
+      id: `toner-${index}`,
+      package_size: 500,
+      package_unit: "ml"
+    })
+  );
+  const events = [intakeEvent("2026-01-01", 1)];
+  const stats = calculatePurchaseStats(
+    product.id,
+    purchases,
+    events,
+    "2026-01-02"
+  );
+  const analysis = calculateProductAnalysis(
+    product,
+    purchases,
+    events,
+    [],
+    stats,
+    "2026-01-02"
+  );
+
+  assert.equal(analysis.consumptionStats.source, "purchase");
+  assert.ok(Math.abs((analysis.consumptionStats.annualPackageCount || 0) - 1.5) < 0.01);
+  assert.equal(analysis.estimate.forecastSource, "purchase_volume");
+  assert.ok((analysis.estimate.remainingDays || 0) > 200);
+  assert.equal(getInventoryAttentionKind(product, analysis.estimate), null);
+  assert.equal(isRepurchaseDue(product, stats, analysis.estimate), false);
+  assert.equal(analysis.estimate.isUrgent, false);
+});
+
+test("구매량 기반 소진일이 가까우면 구매 간격보다 소진 임박을 표시한다", () => {
+  const product = {
+    ...baseProduct,
+    name: "Oats Thick",
+    package_size: 500,
+    capacity_unit: "g",
+    current_quantity: 1,
+    low_stock_threshold: 0,
+    alert_days: 100
+  };
+  const purchases = ["2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01"].map(
+    (date, index) => purchase(date, { id: `oats-${index}` })
+  );
+  const events = [intakeEvent("2026-01-01", 1)];
+  const stats = calculatePurchaseStats(
+    product.id,
+    purchases,
+    events,
+    "2026-01-02"
+  );
+  const analysis = calculateProductAnalysis(
+    product,
+    purchases,
+    events,
+    [],
+    stats,
+    "2026-01-02"
+  );
+
+  assert.equal(analysis.estimate.forecastSource, "purchase_volume");
+  assert.equal(getInventoryAttentionKind(product, analysis.estimate), "depletion");
+  assert.equal(isRepurchaseDue(product, stats, analysis.estimate), false);
+  assert.match(analysis.estimate.urgentReason || "", /과거 구매량/);
+});
+
+test("구매량 근거가 부족하면 기존 수량 안전망을 사용한다", () => {
+  const product = {
+    ...baseProduct,
+    current_quantity: 1,
+    low_stock_threshold: 1
+  };
+  const purchases = ["2025-10-01", "2025-12-01"].map((date, index) =>
+    purchase(date, {
+      id: `short-history-${index}`,
+      package_size: 1600,
+      package_unit: "ml"
+    })
+  );
+  const events = [intakeEvent("2026-01-01", 1)];
+  const analysis = calculateProductAnalysis(
+    product,
+    purchases,
+    events,
+    [],
+    null,
+    "2026-01-02"
+  );
+
+  assert.notEqual(analysis.estimate.forecastSource, "purchase_volume");
+  assert.equal(getInventoryAttentionKind(product, analysis.estimate), "quantity");
 });
 
 test("제품 카드 보충 정보는 괄호를 쓰고 날짜 뒤 정보는 쉼표로 구분한다", () => {

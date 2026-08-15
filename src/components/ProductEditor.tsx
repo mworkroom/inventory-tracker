@@ -435,7 +435,7 @@ export function ProductEditor({
             <div className="form-grid two-columns">
               <label>
                 <span className="field-label">
-                  현재 재고가 몇 {draft.unitLabel || "단위"} 이하일 때?
+                  소비 속도를 모를 때 몇 {draft.unitLabel || "단위"} 이하일 때?
                 </span>
                 <input
                   type="number"
@@ -457,9 +457,7 @@ export function ProductEditor({
               </label>
             </div>
             <p className="field-hint">
-              {isCycle
-                ? "g·ml 잔량이 아니라 통·병·봉 개수와 예상 잔여일로 재고 확인 시점을 판단합니다."
-                : "현재 개수와 예상 잔여일 중 하나가 기준에 닿으면 재고 확인으로 표시합니다."}
+              실제 사용 속도를 우선하고, 충분한 과거 구매량이 있으면 그 소비 속도를 사용합니다. 수량 기준은 소진 시기를 계산할 수 없을 때만 적용합니다.
             </p>
           </section>
 

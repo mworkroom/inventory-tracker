@@ -227,13 +227,24 @@ function StatisticsPanel({
   stockInitialized: boolean;
   isCycle: boolean;
 }) {
+  const hasDepletionForecast =
+    estimate.forecastSource === "usage" || estimate.forecastSource === "purchase_volume";
+  const depletionForecastStatus =
+    estimate.forecastSource === "usage"
+      ? "실제 사용 기준"
+      : estimate.forecastSource === "purchase_volume"
+        ? "구매량 추정"
+        : "사용 기록 학습 중";
+  const depletionForecastSuffix =
+    estimate.forecastSource === "purchase_volume" ? " (과거 구매량 추정)" : "";
+
   return (
     <div className="details-statistics">
       <section className="forecast-section stock-forecast-section">
         <div className="forecast-section-heading">
           <h3>재고/사용 기준</h3>
           <span className="forecast-status neutral">
-            {estimate.forecastSource === "usage" ? "소진일 계산됨" : "사용 기록 학습 중"}
+            {depletionForecastStatus}
           </span>
         </div>
         <dl className="product-info forecast-info">
@@ -263,8 +274,8 @@ function StatisticsPanel({
           )}
           <InfoRow
             label="예상 소진 시기"
-            value={estimate.forecastSource === "usage" && estimate.estimatedOutDate
-              ? `${formatDate(estimate.estimatedOutDate)}, ${formatApproxDays(estimate.remainingDays)}`
+            value={hasDepletionForecast && estimate.estimatedOutDate
+              ? `${formatDate(estimate.estimatedOutDate)}, ${formatApproxDays(estimate.remainingDays)}${depletionForecastSuffix}`
               : stockInitialized
                 ? isCycle
                   ? "완료된 사용 주기를 기록하면 계산"
@@ -273,7 +284,7 @@ function StatisticsPanel({
           />
           <InfoRow
             label="재고 알림 기준"
-            value={`${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하 또는 예상 소진 ${product.alert_days}일 전`}
+            value={`예상 소진 ${product.alert_days}일 전 / 소진 예측이 없으면 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하`}
           />
         </dl>
       </section>

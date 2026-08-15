@@ -11,6 +11,8 @@ import type {
 const DAY_MS = 86_400_000;
 const AVERAGE_DAYS_PER_MONTH = 30.4375;
 const AVERAGE_MONTH_DAYS = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const PURCHASE_FORECAST_MIN_RECORDS = 3;
+const PURCHASE_FORECAST_MIN_OBSERVATION_DAYS = 180;
 
 export function todayIso(): string {
   const now = new Date();
@@ -190,39 +192,28 @@ export function estimateProduct(
     ? purchaseFallbackDate
     : stockBase.estimatedOutDate;
   const forecastSource: ProductEstimate["forecastSource"] = usesPurchaseFallback
-    ? "purchase"
+    ? "purchase_interval"
     : stockBase.forecastSource;
 
-  const quantityUrgent =
-    stockInitialized &&
-    product.current_quantity <= product.low_stock_threshold;
-  const daysUrgent =
-    remainingDays !== null && remainingDays <= product.alert_days;
-  const isUrgent = quantityUrgent || daysUrgent;
-
-  let urgentReason: string | null = null;
-  if (quantityUrgent) {
-    urgentReason = `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
-  } else if (daysUrgent && remainingDays !== null) {
-    urgentReason = forecastSource === "purchase"
-      ? `과거 실제 구매일 기준 다음 재구매 예상일까지 ${Math.max(0, Math.round(remainingDays))}일 남았습니다.`
-      : `현재 사용 속도라면 약 ${Math.max(0, Math.round(remainingDays))}일 후 재고가 소진됩니다.`;
-  }
-
-  return {
+  return withProductUrgency(product, {
     ...stockBase,
     remainingDays,
     estimatedOutDate,
-    forecastSource,
-    isUrgent,
-    urgentReason
-  };
+    forecastSource
+  });
 }
 
 export function getInventoryAttentionKind(
   product: InventoryProduct,
   estimate: ProductEstimate
-): "quantity" | "usage" | null {
+): "quantity" | "depletion" | null {
+  if (isDepletionForecastSource(estimate.forecastSource)) {
+    return estimate.remainingDays !== null &&
+      estimate.remainingDays <= product.alert_days
+      ? "depletion"
+      : null;
+  }
+
   if (
     isStockInitialized(product) &&
     product.current_quantity <= product.low_stock_threshold
@@ -230,23 +221,19 @@ export function getInventoryAttentionKind(
     return "quantity";
   }
 
-  if (
-    estimate.forecastSource === "usage" &&
-    estimate.remainingDays !== null &&
-    estimate.remainingDays <= product.alert_days
-  ) {
-    return "usage";
-  }
-
   return null;
 }
 
 export function isRepurchaseDue(
   product: InventoryProduct,
-  purchaseStats: PurchaseStats
+  purchaseStats: PurchaseStats,
+  estimate: ProductEstimate | null = null
 ): boolean {
   if (product.next_sale_on) {
     return daysBetween(todayIso(), product.next_sale_on) <= product.alert_days;
+  }
+  if (estimate && isDepletionForecastSource(estimate.forecastSource)) {
+    return false;
   }
   return (
     purchaseStats.daysUntilNextPurchase !== null &&
@@ -261,8 +248,50 @@ export function isInventoryAttentionNeeded(
 ): boolean {
   return (
     getInventoryAttentionKind(product, estimate) !== null ||
-    isRepurchaseDue(product, purchaseStats)
+    isRepurchaseDue(product, purchaseStats, estimate)
   );
+}
+
+function isDepletionForecastSource(
+  source: ProductEstimate["forecastSource"]
+): boolean {
+  return source === "usage" || source === "purchase_volume";
+}
+
+function withProductUrgency(
+  product: InventoryProduct,
+  estimate: ProductEstimate
+): ProductEstimate {
+  const hasDepletionForecast = isDepletionForecastSource(estimate.forecastSource);
+  const quantityUrgent =
+    isStockInitialized(product) &&
+    !hasDepletionForecast &&
+    product.current_quantity <= product.low_stock_threshold;
+  const daysUrgent =
+    estimate.remainingDays !== null &&
+    estimate.remainingDays <= product.alert_days;
+
+  let urgentReason: string | null = null;
+  if (hasDepletionForecast && daysUrgent && estimate.remainingDays !== null) {
+    urgentReason = estimate.forecastSource === "purchase_volume"
+      ? `과거 구매량으로 추정하면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
+      : `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`;
+  } else if (quantityUrgent) {
+    urgentReason = `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`;
+  } else if (
+    estimate.forecastSource === "purchase_interval" &&
+    daysUrgent &&
+    estimate.remainingDays !== null
+  ) {
+    urgentReason = `과거 실제 구매일 기준 다음 재구매 예상일까지 ${Math.max(0, Math.round(estimate.remainingDays))}일 남았습니다.`;
+  }
+
+  return {
+    ...estimate,
+    isUrgent: (hasDepletionForecast && daysUrgent) || quantityUrgent ||
+      (estimate.forecastSource === "purchase_interval" && daysUrgent),
+    urgentReason
+  };
 }
 
 function estimateCycleProduct(
@@ -544,6 +573,107 @@ export function calculateConsumptionStats(
     recommendedPurchaseQuantity,
     expectedStockOnSaleDate
   };
+}
+
+export function calculateProductAnalysis(
+  product: InventoryProduct,
+  purchases: InventoryPurchase[],
+  events: InventoryEvent[],
+  cycles: UsageCycle[],
+  purchaseStats: PurchaseStats | null = null,
+  today = todayIso()
+): { estimate: ProductEstimate; consumptionStats: ConsumptionStats } {
+  const resolvedPurchaseStats = purchaseStats ?? calculatePurchaseStats(
+    product.id,
+    purchases,
+    events,
+    today
+  );
+  const baseEstimate = estimateProduct(
+    product,
+    events,
+    cycles,
+    today,
+    resolvedPurchaseStats
+  );
+  const consumptionStats = calculateConsumptionStats(
+    product,
+    purchases,
+    events,
+    baseEstimate,
+    today
+  );
+
+  return {
+    estimate: applyPurchaseConsumptionForecast(
+      product,
+      baseEstimate,
+      consumptionStats,
+      today
+    ),
+    consumptionStats
+  };
+}
+
+function applyPurchaseConsumptionForecast(
+  product: InventoryProduct,
+  estimate: ProductEstimate,
+  stats: ConsumptionStats,
+  today: string
+): ProductEstimate {
+  if (
+    !isStockInitialized(product) ||
+    estimate.forecastSource === "usage" ||
+    !isQualifiedPurchaseConsumption(stats) ||
+    stats.activeMonthlyPackageCount === null ||
+    stats.activeMonthlyPackageCount <= 0
+  ) {
+    return estimate;
+  }
+
+  const dailyUnitCount =
+    stats.activeMonthlyPackageCount / AVERAGE_DAYS_PER_MONTH;
+  const activeDaysPerUnit = 1 / dailyUnitCount;
+  let remainingActiveDays =
+    Math.max(0, product.current_quantity) * activeDaysPerUnit;
+
+  if (product.tracking_mode === "cycle" && product.active_opened_on) {
+    const elapsedActiveDays = countActiveDays(
+      product.active_opened_on,
+      today,
+      product.active_months
+    );
+    const openedUnitRemainingDays = Math.max(
+      0,
+      activeDaysPerUnit - elapsedActiveDays
+    );
+    const unopenedUnitCount = Math.max(0, product.current_quantity - 1);
+    remainingActiveDays =
+      openedUnitRemainingDays + unopenedUnitCount * activeDaysPerUnit;
+  }
+
+  const estimatedOutDate = addActiveDays(
+    today,
+    Math.max(0, Math.ceil(remainingActiveDays)),
+    product.active_months
+  );
+  return withProductUrgency(product, {
+    ...estimate,
+    forecastSource: "purchase_volume",
+    remainingDays: daysBetween(today, estimatedOutDate),
+    estimatedOutDate
+  });
+}
+
+function isQualifiedPurchaseConsumption(stats: ConsumptionStats): boolean {
+  const validRecordCount = stats.sampleCount - stats.excludedSizeRecordCount;
+  return (
+    stats.source === "purchase" &&
+    validRecordCount >= PURCHASE_FORECAST_MIN_RECORDS &&
+    stats.observationDays !== null &&
+    stats.observationDays >= PURCHASE_FORECAST_MIN_OBSERVATION_DAYS &&
+    stats.excludedSizeRecordCount <= validRecordCount
+  );
 }
 
 function usageBasedConsumption(

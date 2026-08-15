@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import {
-  calculateConsumptionStats,
+  calculateProductAnalysis,
   calculatePurchaseStats,
-  estimateProduct,
   getInventoryAttentionKind,
   isInventoryAttentionNeeded,
   isRepurchaseDue
@@ -59,38 +58,29 @@ export function useInventoryViewModel({
     return result;
   }, [inventory.events, inventory.products, inventory.purchases]);
 
-  const estimates = useMemo(() => {
-    const result = new Map<string, ProductEstimate>();
+  const productAnalysis = useMemo(() => {
+    const estimates = new Map<string, ProductEstimate>();
+    const consumptionStats = new Map<string, ConsumptionStats>();
     inventory.products.forEach((product) => {
-      result.set(
-        product.id,
-        estimateProduct(
-          product,
-          inventory.events,
-          inventory.cycles,
-          undefined,
-          purchaseStats.get(product.id) || null
-        )
+      const analysis = calculateProductAnalysis(
+        product,
+        inventory.purchases,
+        inventory.events,
+        inventory.cycles,
+        purchaseStats.get(product.id) || null
       );
+      estimates.set(product.id, analysis.estimate);
+      consumptionStats.set(product.id, analysis.consumptionStats);
     });
-    return result;
-  }, [inventory.cycles, inventory.events, inventory.products, purchaseStats]);
-
-  const consumptionStats = useMemo(() => {
-    const result = new Map<string, ConsumptionStats>();
-    inventory.products.forEach((product) => {
-      result.set(
-        product.id,
-        calculateConsumptionStats(
-          product,
-          inventory.purchases,
-          inventory.events,
-          estimates.get(product.id) || estimateProduct(product, [], [])
-        )
-      );
-    });
-    return result;
-  }, [estimates, inventory.events, inventory.products, inventory.purchases]);
+    return { estimates, consumptionStats };
+  }, [
+    inventory.cycles,
+    inventory.events,
+    inventory.products,
+    inventory.purchases,
+    purchaseStats
+  ]);
+  const { estimates, consumptionStats } = productAnalysis;
 
   const purchasesByProduct = useMemo(() => {
     const result = new Map<string, InventoryPurchase[]>();
@@ -140,7 +130,9 @@ export function useInventoryViewModel({
           .includes(normalizedQuery);
       })
       .sort((a, b) =>
-        compareProducts(a, b, estimates, purchaseStats)
+        filter === "attention"
+          ? compareProducts(a, b, estimates, purchaseStats)
+          : a.name.localeCompare(b.name, "ko-KR")
       );
   }, [estimates, filter, inventory.products, purchaseStats, query, storeById]);
 
@@ -186,8 +178,10 @@ function compareProducts(
 
   const aStats = purchaseStats.get(a.id);
   const bStats = purchaseStats.get(b.id);
-  const aRepurchaseDue = aStats && isRepurchaseDue(a, aStats) ? 1 : 0;
-  const bRepurchaseDue = bStats && isRepurchaseDue(b, bStats) ? 1 : 0;
+  const aRepurchaseDue =
+    aStats && isRepurchaseDue(a, aStats, aEstimate || null) ? 1 : 0;
+  const bRepurchaseDue =
+    bStats && isRepurchaseDue(b, bStats, bEstimate || null) ? 1 : 0;
   if (aRepurchaseDue !== bRepurchaseDue) {
     return bRepurchaseDue - aRepurchaseDue;
   }
