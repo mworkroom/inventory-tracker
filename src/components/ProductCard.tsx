@@ -128,7 +128,7 @@ export function ProductCard({
     : inventoryAttentionKind === "usage"
       ? "거의 다 써가요"
       : repurchaseDue
-        ? "평소 재구매 시기가 가까워요"
+        ? "재구매할 때가 됐어요"
         : stockInitialized
           ? "재고는 충분해요"
           : "재고를 설정해 주세요";
