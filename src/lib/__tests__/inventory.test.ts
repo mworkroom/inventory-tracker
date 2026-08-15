@@ -52,6 +52,7 @@ const baseProduct: InventoryProduct = {
   next_sale_on: null,
   purchase_coverage_months: null,
   purchase_safety_quantity: 0,
+  active_months: null,
   notes: null,
   is_archived: false,
   created_by: null,
@@ -417,6 +418,63 @@ test("세일 날짜의 예상 재고를 빼고 여유 재고를 더해 추천 �
   assert.ok(Math.abs((stats.expectedStockOnSaleDate || 0) - 0.699) < 0.02);
 });
 
+test("계절 제품은 연평균과 사용 월 평균을 나누고 활성 월만 구매량에 반영한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    package_size: 50,
+    capacity_unit: "ml",
+    current_quantity: 1,
+    active_months: [6, 7, 8],
+    next_sale_on: "2026-05-15",
+    purchase_coverage_months: 4,
+    purchase_safety_quantity: 0
+  };
+  const purchases = [
+    purchase("2025-01-01", {
+      package_count: 3,
+      package_size: 50,
+      package_unit: "ml"
+    })
+  ];
+  const events = [intakeEvent("2026-01-01", 1)];
+  const estimate = estimateProduct(product, events, [], "2026-01-01");
+  const stats = calculateConsumptionStats(
+    product,
+    purchases,
+    events,
+    estimate,
+    "2026-01-01"
+  );
+
+  assert.ok(Math.abs((stats.monthlyPackageCount || 0) - 0.25) < 0.01);
+  assert.ok(Math.abs((stats.activeMonthlyPackageCount || 0) - 0.99) < 0.02);
+  assert.ok(Math.abs((stats.annualPackageCount || 0) - 3) < 0.01);
+  assert.equal(stats.nextSeasonStartOn, "2026-06-01");
+  assert.equal(stats.nextSeasonEndOn, "2026-08-31");
+  assert.equal(stats.recommendedPurchaseQuantity, 2);
+});
+
+test("계절 제품의 소진 예상일은 비사용 월을 건너뛴다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    tracking_mode: "count",
+    unit_label: "통",
+    package_size: null,
+    capacity_unit: null,
+    current_quantity: 1,
+    active_months: [6, 7, 8]
+  };
+  const events = [
+    useEvent("2026-06-01"),
+    useEvent("2026-07-01")
+  ];
+  const estimate = estimateProduct(product, events, [], "2026-08-31");
+
+  assert.equal(estimate.daysPerUnit, 30);
+  assert.equal(estimate.estimatedOutDate, "2027-06-30");
+  assert.equal(estimate.remainingDays, 303);
+});
+
 test("과거 입고 수량을 수정하면 뒤에 입력한 재고 기록까지 다시 계산한다", () => {
   const first = {
     ...intakeEvent("2026-04-06", 2),
@@ -589,7 +647,14 @@ test("제품 카드 보충 정보는 괄호를 쓰고 날짜 뒤 정보는 쉼�
         monthlyAmount: 24.77,
         monthlyUnit: "ml",
         monthlyPackageCount: 0.5,
+        activeMonthlyAmount: 24.77,
+        activeMonthlyPackageCount: 0.5,
         annualAmount: 297.24,
+        annualPackageCount: 6,
+        nextSeasonStartOn: null,
+        nextSeasonEndOn: null,
+        nextSeasonAmount: null,
+        nextSeasonPackageCount: null,
         sampleCount: 8,
         observationDays: 365,
         inferredSizeRecordCount: 0,

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(41);
 
 select has_table(
   'public',
@@ -25,6 +25,12 @@ select has_column(
   'inventory_products',
   'purchase_safety_quantity',
   'inventory products store purchase safety quantity'
+);
+select has_column(
+  'public',
+  'inventory_products',
+  'active_months',
+  'inventory products store optional active usage months'
 );
 select has_table(
   'public',
@@ -164,6 +170,11 @@ select lives_ok(
       p_tracking_mode := 'count',
       p_unit_label := '인분',
       p_low_stock_threshold := 2,
+      p_alert_days := 30,
+      p_package_size := null,
+      p_capacity_unit := null,
+      p_current_consumer_count := 1,
+      p_notes := null,
       p_store_ids := array(
         select id
         from public.inventory_stores
@@ -173,7 +184,8 @@ select lives_ok(
       p_category := '식료품',
       p_next_sale_on := '2026-11-27'::date,
       p_purchase_coverage_months := 12,
-      p_purchase_safety_quantity := 1
+      p_purchase_safety_quantity := 1,
+      p_active_months := array[6, 7, 8]
     )
   $$,
   'a workspace member can create a product through the RPC'
@@ -189,12 +201,21 @@ select results_eq(
 );
 select results_eq(
   $$
-    select next_sale_on, purchase_coverage_months, purchase_safety_quantity
+    select
+      next_sale_on,
+      purchase_coverage_months,
+      purchase_safety_quantity,
+      active_months
     from public.inventory_products
     where name = '대패삼겹'
   $$,
-  $$ values ('2026-11-27'::date, 12::integer, 1::integer) $$,
-  'product creation persists the optional sale purchase plan'
+  $$ values (
+    '2026-11-27'::date,
+    12::integer,
+    1::integer,
+    array[6, 7, 8]::integer[]
+  ) $$,
+  'product creation persists the optional sale plan and active months'
 );
 select results_eq(
   $$
@@ -260,7 +281,8 @@ select lives_ok(
       p_category := '식료품',
       p_next_sale_on := null,
       p_purchase_coverage_months := null,
-      p_purchase_safety_quantity := 0
+      p_purchase_safety_quantity := 0,
+      p_active_months := null
     )
   $$,
   'a workspace member can update product details and shopping malls atomically'
@@ -278,6 +300,15 @@ select results_eq(
   $$,
   $$ values ('마켓컬리'::text) $$,
   'updating shopping malls replaces obsolete product links'
+);
+select results_eq(
+  $$
+    select active_months is null
+    from public.inventory_products
+    where name = '대패삼겹'
+  $$,
+  $$ values (true) $$,
+  'null active months restore year-round usage'
 );
 
 select lives_ok(

@@ -9,7 +9,7 @@ import {
 import { getProductStoreIds } from "../lib/inventoryStores";
 import {
   formatConsumptionAmount,
-  formatDecimal,
+  formatConsumptionTotal,
   formatPurchaseForecast
 } from "../lib/productPresentation";
 import type {
@@ -213,14 +213,17 @@ export function ProductCard({
             </div>
             <div className="key-statistics-grid">
               <Metric
-                label="월평균 소비량"
+                label={product.active_months ? "사용 월 평균" : "월평균 소비량"}
                 value={formatConsumptionAmount(consumptionStats, product.unit_label)}
               />
               <Metric
                 label="1년 예상 필요량"
-                value={consumptionStats.annualAmount !== null && consumptionStats.monthlyUnit
-                  ? `약 ${formatDecimal(consumptionStats.annualAmount)}${consumptionStats.monthlyUnit}`
-                  : "계산할 기록이 더 필요함"}
+                value={formatConsumptionTotal(
+                  consumptionStats.annualAmount,
+                  consumptionStats.annualPackageCount,
+                  consumptionStats.monthlyUnit,
+                  product.unit_label
+                )}
               />
             </div>
             {product.next_sale_on && product.purchase_coverage_months ? (

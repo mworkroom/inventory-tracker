@@ -9,16 +9,83 @@ export function formatConsumptionAmount(
   stats: ConsumptionStats,
   packageUnit: string
 ): string {
-  if (stats.monthlyAmount === null || !stats.monthlyUnit) {
+  const seasonal = stats.nextSeasonStartOn !== null;
+  const amount = seasonal ? stats.activeMonthlyAmount : stats.monthlyAmount;
+  const packageCount = seasonal
+    ? stats.activeMonthlyPackageCount
+    : stats.monthlyPackageCount;
+  if (amount === null || !stats.monthlyUnit) {
     return "소비량을 계산할 기록이 더 필요함";
   }
 
+  const period = seasonal ? "사용 월" : "월";
+  const base = `약 ${formatDecimal(amount)}${stats.monthlyUnit}/${period}`;
+  if (
+    packageCount !== null &&
+    Math.abs(packageCount - amount) > 0.000001
+  ) {
+    return `${base} (약 ${formatDecimal(packageCount)}${packageUnit}/${period})`;
+  }
+  return base;
+}
+
+export function formatAnnualizedMonthlyAmount(
+  stats: ConsumptionStats,
+  packageUnit: string
+): string {
+  if (stats.monthlyAmount === null || !stats.monthlyUnit) {
+    return "소비량을 계산할 기록이 더 필요함";
+  }
   const base = `약 ${formatDecimal(stats.monthlyAmount)}${stats.monthlyUnit}/월`;
   if (
     stats.monthlyPackageCount !== null &&
     Math.abs(stats.monthlyPackageCount - stats.monthlyAmount) > 0.000001
   ) {
     return `${base} (약 ${formatDecimal(stats.monthlyPackageCount)}${packageUnit}/월)`;
+  }
+  return base;
+}
+
+export function formatActiveMonths(product: InventoryProduct): string {
+  const months = product.active_months;
+  if (!months || months.length === 0 || months.length === 12) return "연중 사용";
+
+  const sorted = [...new Set(months)].sort((a, b) => a - b);
+  const ranges: Array<{ start: number; end: number }> = [];
+  sorted.forEach((month) => {
+    const last = ranges[ranges.length - 1];
+    if (last && month === last.end + 1) last.end = month;
+    else ranges.push({ start: month, end: month });
+  });
+
+  if (
+    ranges.length > 1 &&
+    ranges[0].start === 1 &&
+    ranges[ranges.length - 1].end === 12
+  ) {
+    const first = ranges.shift()!;
+    const last = ranges.pop()!;
+    ranges.unshift({ start: last.start, end: first.end + 12 });
+  }
+
+  return ranges.map(({ start, end }) => {
+    if (end > 12) return `${start}월–다음 해 ${end - 12}월`;
+    return start === end ? `${start}월` : `${start}–${end}월`;
+  }).join(", ");
+}
+
+export function formatConsumptionTotal(
+  amount: number | null,
+  packageCount: number | null,
+  amountUnit: string | null,
+  packageUnit: string
+): string {
+  if (amount === null || !amountUnit) {
+    return "소비량을 계산할 기록이 더 필요함";
+  }
+  const base = `약 ${formatDecimal(amount)}${amountUnit}`;
+  if (packageCount !== null && Math.abs(packageCount - amount) > 0.000001) {
+    return `${base} (약 ${formatDecimal(packageCount)}${packageUnit})`;
   }
   return base;
 }

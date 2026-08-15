@@ -8,7 +8,10 @@ import {
 } from "../lib/inventory";
 import {
   formatActiveMeta,
+  formatActiveMonths,
+  formatAnnualizedMonthlyAmount,
   formatConsumptionAmount,
+  formatConsumptionTotal,
   formatDecimal,
   formatHistoryRange
 } from "../lib/productPresentation";
@@ -305,16 +308,47 @@ function StatisticsPanel({
               ? `${formatDate(purchaseStats.latestIntakeOn)}, ${formatQuantity(purchaseStats.latestIntakeQuantity)}${product.unit_label}`
               : "아직 없음"}
           />
-          <InfoRow
-            label="월평균 소비량"
-            value={formatConsumptionAmount(consumptionStats, product.unit_label)}
-          />
+          {product.active_months ? (
+            <>
+              <InfoRow
+                label="사용 시기"
+                value={formatActiveMonths(product)}
+              />
+              <InfoRow
+                label="연평균 월 환산량"
+                value={formatAnnualizedMonthlyAmount(consumptionStats, product.unit_label)}
+              />
+              <InfoRow
+                label="사용 월 평균 소비량"
+                value={formatConsumptionAmount(consumptionStats, product.unit_label)}
+              />
+            </>
+          ) : (
+            <InfoRow
+              label="월평균 소비량"
+              value={formatConsumptionAmount(consumptionStats, product.unit_label)}
+            />
+          )}
           <InfoRow
             label="1년 예상 필요량"
-            value={consumptionStats.annualAmount !== null && consumptionStats.monthlyUnit
-              ? `약 ${formatDecimal(consumptionStats.annualAmount)}${consumptionStats.monthlyUnit}`
-              : "소비량을 계산할 기록이 더 필요함"}
+            value={formatConsumptionTotal(
+              consumptionStats.annualAmount,
+              consumptionStats.annualPackageCount,
+              consumptionStats.monthlyUnit,
+              product.unit_label
+            )}
           />
+          {consumptionStats.nextSeasonStartOn && consumptionStats.nextSeasonEndOn ? (
+            <InfoRow
+              label="사용 시즌 예상량"
+              value={`${formatDate(consumptionStats.nextSeasonStartOn)}–${formatDate(consumptionStats.nextSeasonEndOn)}, ${formatConsumptionTotal(
+                consumptionStats.nextSeasonAmount,
+                consumptionStats.nextSeasonPackageCount,
+                consumptionStats.monthlyUnit,
+                product.unit_label
+              )}`}
+            />
+          ) : null}
           {product.next_sale_on && product.purchase_coverage_months ? (
             <InfoRow
               label="다음 세일 구매 추천"

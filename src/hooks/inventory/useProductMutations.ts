@@ -49,7 +49,10 @@ export function useProductMutations({
           p_purchase_safety_quantity: parseRequiredInteger(
             draft.purchaseSafetyQuantity,
             "여유 재고"
-          )
+          ),
+          p_active_months: draft.activeMonths.length === 12
+            ? null
+            : draft.activeMonths
         });
         if (error) throw error;
         await refresh(true);
@@ -88,7 +91,10 @@ export function useProductMutations({
             p_purchase_safety_quantity: parseRequiredInteger(
               draft.purchaseSafetyQuantity,
               "여유 재고"
-            )
+            ),
+            p_active_months: draft.activeMonths.length === 12
+              ? null
+              : draft.activeMonths
           }
         );
         if (error) throw error;

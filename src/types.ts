@@ -49,6 +49,7 @@ export interface InventoryProduct {
   next_sale_on: string | null;
   purchase_coverage_months: number | null;
   purchase_safety_quantity: number;
+  active_months: number[] | null;
   notes: string | null;
   is_archived: boolean;
   created_by: string | null;
@@ -117,6 +118,7 @@ export interface ProductDraft {
   nextSaleOn: string;
   purchaseCoverageMonths: string;
   purchaseSafetyQuantity: string;
+  activeMonths: number[];
   notes: string;
 }
 
@@ -195,7 +197,14 @@ export interface ConsumptionStats {
   monthlyAmount: number | null;
   monthlyUnit: string | null;
   monthlyPackageCount: number | null;
+  activeMonthlyAmount: number | null;
+  activeMonthlyPackageCount: number | null;
   annualAmount: number | null;
+  annualPackageCount: number | null;
+  nextSeasonStartOn: string | null;
+  nextSeasonEndOn: string | null;
+  nextSeasonAmount: number | null;
+  nextSeasonPackageCount: number | null;
   sampleCount: number;
   observationDays: number | null;
   inferredSizeRecordCount: number;
