@@ -217,7 +217,7 @@ export function ProductCard({
 
           <section className="key-statistics" aria-labelledby={`key-stats-${product.id}`}>
             <div className="compact-section-heading">
-              <h3 id={`key-stats-${product.id}`}>핵심 통계</h3>
+              <h3 id={`key-stats-${product.id}`}>통계</h3>
               <span>{consumptionSourceLabel(consumptionStats)}</span>
             </div>
             <div className="key-statistics-grid">
