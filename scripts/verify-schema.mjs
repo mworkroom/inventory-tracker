@@ -20,7 +20,8 @@ assert.deepEqual(
     "20260724212046_correct_latest_inventory_event_amount.sql",
     "20260726020940_add_product_shopping_malls.sql",
     "20260726021227_add_product_store_foreign_key_indexes.sql",
-    "20260815042204_add_purchase_planning.sql"
+    "20260815042204_add_purchase_planning.sql",
+  "20260815144215_replay_inventory_event_corrections.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -61,6 +62,13 @@ const purchasePlanningSql = await readFile(
   join(
     migrationsDirectory,
     "20260815042204_add_purchase_planning.sql"
+  ),
+  "utf8"
+);
+const eventReplaySql = await readFile(
+  join(
+    migrationsDirectory,
+  "20260815144215_replay_inventory_event_corrections.sql"
   ),
   "utf8"
 );
@@ -216,6 +224,32 @@ assert.match(
   purchasePlanningSql,
   /create function public\.update_inventory_product_with_stores\([\s\S]*?next_sale_on = p_next_sale_on[\s\S]*?purchase_coverage_months = p_purchase_coverage_months/,
   "제품 수정 RPC가 세일 구매 계획을 저장하지 않습니다."
+);
+
+assert.match(
+  eventReplaySql,
+  /create function private\.replay_inventory_product_stock\([\s\S]*?order by created_at, id[\s\S]*?update public\.inventory_products[\s\S]*?current_quantity = v_running_quantity/,
+  "재고 기록 재계산 함수가 원장을 생성 순서대로 다시 연결하지 않습니다."
+);
+assert.match(
+  eventReplaySql,
+  /when 'adjustment' then[\s\S]*?v_next_quantity := v_event\.quantity_after/,
+  "재고 정정 기록의 실제 수량 기준점을 보존하지 않습니다."
+);
+assert.match(
+  eventReplaySql,
+  /create function public\.update_inventory_event_amount\([\s\S]*?private\.is_workspace_member[\s\S]*?private\.replay_inventory_product_stock/,
+  "과거 입고·사용 기록 수정 RPC가 권한 확인 후 원장을 재계산하지 않습니다."
+);
+assert.match(
+  eventReplaySql,
+  /create function public\.delete_inventory_event\([\s\S]*?event_type not in \('intake', 'use'\)[\s\S]*?private\.replay_inventory_product_stock/,
+  "입고·사용 기록 삭제 RPC가 허용 범위를 제한하고 원장을 재계산하지 않습니다."
+);
+assert.match(
+  eventReplaySql,
+  /revoke all on function public\.update_inventory_event_amount\(uuid, numeric\)[\s\S]*?grant execute on function public\.update_inventory_event_amount\(uuid, numeric\)[\s\S]*?to authenticated;[\s\S]*?revoke all on function public\.delete_inventory_event\(uuid\)[\s\S]*?grant execute on function public\.delete_inventory_event\(uuid\)[\s\S]*?to authenticated;/,
+  "재고 기록 수정·삭제 RPC의 실행 권한이 올바르지 않습니다."
 );
 
 for (const functionName of [

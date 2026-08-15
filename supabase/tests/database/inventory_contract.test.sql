@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(39);
 
 select has_table(
   'public',
@@ -97,6 +97,42 @@ select is(
   ),
   false,
   'authenticated clients cannot insert product shopping malls directly'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.update_inventory_event_amount(uuid,numeric)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can execute the replaying event update RPC'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.update_inventory_event_amount(uuid,numeric)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot execute the replaying event update RPC'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.delete_inventory_event(uuid)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can execute the replaying event delete RPC'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.delete_inventory_event(uuid)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot execute the replaying event delete RPC'
 );
 
 insert into auth.users (id, email)
@@ -304,6 +340,100 @@ select results_eq(
   $$,
   $$ values (7::numeric, 7::numeric, 7::numeric) $$,
   'the correction keeps product stock and ledger synchronized'
+);
+
+select lives_ok(
+  $$
+    select public.create_inventory_product_with_stores(
+      p_workspace_id := '00000000-0000-0000-0000-000000000002'::uuid,
+      p_name := '히알루론산 크림 테스트',
+      p_tracking_mode := 'cycle',
+      p_unit_label := '통',
+      p_low_stock_threshold := 1,
+      p_package_size := 50,
+      p_capacity_unit := 'ml',
+      p_store_ids := '{}'::uuid[],
+      p_category := '화장품'
+    )
+  $$,
+  'a cycle product can be created for historical event correction tests'
+);
+select lives_ok(
+  $$
+    select public.record_inventory_action(
+      p_product_id := (
+        select id from public.inventory_products
+        where name = '히알루론산 크림 테스트'
+      ),
+      p_action := 'intake',
+      p_amount := 2,
+      p_occurred_on := '2026-04-06'::date
+    )
+  $$,
+  'the first cycle-product intake is recorded'
+);
+select lives_ok(
+  $$
+    select public.record_inventory_action(
+      p_product_id := (
+        select id from public.inventory_products
+        where name = '히알루론산 크림 테스트'
+      ),
+      p_action := 'intake',
+      p_amount := 1,
+      p_occurred_on := '2026-04-06'::date
+    )
+  $$,
+  'the compensating cycle-product intake is recorded'
+);
+select lives_ok(
+  $$
+    select public.delete_inventory_event(
+      (
+        select event.id
+        from public.inventory_events as event
+        join public.inventory_products as product
+          on product.id = event.product_id
+        where product.name = '히알루론산 크림 테스트'
+        order by event.created_at desc, event.id desc
+        limit 1
+      )
+    )
+  $$,
+  'deleting a later intake replays the remaining ledger'
+);
+select lives_ok(
+  $$
+    select public.update_inventory_event_amount(
+      (
+        select event.id
+        from public.inventory_events as event
+        join public.inventory_products as product
+          on product.id = event.product_id
+        where product.name = '히알루론산 크림 테스트'
+        limit 1
+      ),
+      3
+    )
+  $$,
+  'updating an earlier cycle-product intake replays current stock'
+);
+select results_eq(
+  $$
+    select
+      product.current_quantity,
+      count(event.id)::bigint,
+      min(event.quantity_before),
+      min(event.quantity_delta),
+      min(event.quantity_after)
+    from public.inventory_products as product
+    left join public.inventory_events as event
+      on event.product_id = product.id
+    where product.name = '히알루론산 크림 테스트'
+    group by product.current_quantity
+  $$,
+  $$ values (3::numeric, 1::bigint, 0::numeric, 3::numeric, 3::numeric) $$,
+  'the corrected cycle-product ledger contains one 3-unit intake and current stock 3'
 );
 
 set local request.jwt.claim.sub =

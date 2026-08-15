@@ -43,6 +43,9 @@ export interface InventoryState {
     event: InventoryEvent,
     amount: string
   ) => Promise<InventoryProduct>;
+  deleteInventoryEvent: (
+    event: InventoryEvent
+  ) => Promise<InventoryProduct>;
   updateActiveUsage: (
     product: InventoryProduct,
     draft: ActiveUsageDraft

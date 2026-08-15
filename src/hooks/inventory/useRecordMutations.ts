@@ -125,12 +125,30 @@ export function useRecordMutations({
         }
 
         const { data, error } = await supabase.rpc(
-          "correct_latest_inventory_event_amount",
+          "update_inventory_event_amount",
           {
             p_event_id: event.id,
             p_amount: parseRequiredNumber(amount, "수정 수량")
           }
         );
+        if (error) throw error;
+        await refresh(true);
+        return data as InventoryProduct;
+      }),
+    [refresh, runMutation]
+  );
+
+  const deleteInventoryEvent = useCallback(
+    (event: InventoryEvent) =>
+      runMutation(async () => {
+        if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+        if (event.event_type !== "intake" && event.event_type !== "use") {
+          throw new Error("입고 또는 사용 기록만 삭제할 수 있습니다.");
+        }
+
+        const { data, error } = await supabase.rpc("delete_inventory_event", {
+          p_event_id: event.id
+        });
         if (error) throw error;
         await refresh(true);
         return data as InventoryProduct;
@@ -192,6 +210,7 @@ export function useRecordMutations({
     recordAction,
     updateActiveUsage,
     correctEventAmount,
+    deleteInventoryEvent,
     updateUsageCycle,
     deleteUsageCycle
   };

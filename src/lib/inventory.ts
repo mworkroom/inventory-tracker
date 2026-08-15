@@ -45,6 +45,112 @@ export function calculateStockCheckUsage(
   return currentQuantity - actualQuantity;
 }
 
+export interface InventoryEventMutationPreview {
+  nextQuantity: number | null;
+  followingEventCount: number;
+  error: string | null;
+}
+
+export function previewInventoryEventMutation(
+  product: InventoryProduct,
+  events: InventoryEvent[],
+  targetEventId: string,
+  amount: number | null
+): InventoryEventMutationPreview {
+  const orderedEvents = events
+    .filter((event) => event.product_id === product.id)
+    .sort((a, b) =>
+      a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
+    );
+  const targetIndex = orderedEvents.findIndex(
+    (event) => event.id === targetEventId
+  );
+  if (targetIndex < 0) {
+    return {
+      nextQuantity: null,
+      followingEventCount: 0,
+      error: "수정할 재고 기록을 찾을 수 없습니다."
+    };
+  }
+
+  const target = orderedEvents[targetIndex];
+  if (target.event_type !== "intake" && target.event_type !== "use") {
+    return {
+      nextQuantity: null,
+      followingEventCount: orderedEvents.length - targetIndex - 1,
+      error: "입고 또는 사용 기록만 수정하거나 삭제할 수 있습니다."
+    };
+  }
+  if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+    return {
+      nextQuantity: null,
+      followingEventCount: orderedEvents.length - targetIndex - 1,
+      error: "수정 수량은 0보다 커야 합니다."
+    };
+  }
+  if (amount !== null && product.tracking_mode === "cycle" && !Number.isInteger(amount)) {
+    return {
+      nextQuantity: null,
+      followingEventCount: orderedEvents.length - targetIndex - 1,
+      error: "개봉·소진 제품의 입고 수량은 정수로 입력해주세요."
+    };
+  }
+
+  let runningQuantity = 0;
+  for (const event of orderedEvents) {
+    if (event.id === targetEventId && amount === null) continue;
+
+    let nextQuantity: number;
+    switch (event.event_type) {
+      case "intake": {
+        const eventAmount = event.id === targetEventId
+          ? amount!
+          : Math.abs(event.quantity_delta);
+        nextQuantity = runningQuantity + eventAmount;
+        break;
+      }
+      case "use": {
+        const eventAmount = event.id === targetEventId
+          ? amount!
+          : Math.abs(event.quantity_delta);
+        nextQuantity = runningQuantity - eventAmount;
+        break;
+      }
+      case "open":
+        if (runningQuantity <= 0) {
+          return {
+            nextQuantity: null,
+            followingEventCount: orderedEvents.length - targetIndex - 1,
+            error: `${formatDate(event.occurred_on)} 개봉 기록 시점에 재고가 0이 됩니다.`
+          };
+        }
+        nextQuantity = runningQuantity;
+        break;
+      case "finish":
+        nextQuantity = runningQuantity - 1;
+        break;
+      case "adjustment":
+        nextQuantity = event.quantity_after;
+        break;
+    }
+
+    if (nextQuantity < 0) {
+      return {
+        nextQuantity: null,
+        followingEventCount: orderedEvents.length - targetIndex - 1,
+        error: `${formatDate(event.occurred_on)} 기록을 반영하면 재고가 음수가 됩니다.`
+      };
+    }
+    runningQuantity = nextQuantity;
+  }
+
+  return {
+    nextQuantity: runningQuantity,
+    followingEventCount: orderedEvents.length - targetIndex - 1,
+    error: null
+  };
+}
+
 export function estimateProduct(
   product: InventoryProduct,
   events: InventoryEvent[],

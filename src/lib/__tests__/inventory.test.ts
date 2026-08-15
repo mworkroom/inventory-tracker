@@ -19,6 +19,7 @@ import {
   median,
   parseDateInput,
   parsePurchaseDates,
+  previewInventoryEventMutation,
   usageCycleDurationDays
 } from "../inventory";
 import {
@@ -409,6 +410,86 @@ test("세일 날짜의 예상 재고를 빼고 여유 재고를 더해 추천 �
 
   assert.equal(stats.recommendedPurchaseQuantity, 5);
   assert.ok(Math.abs((stats.expectedStockOnSaleDate || 0) - 0.699) < 0.02);
+});
+
+test("과거 입고 수량을 수정하면 뒤에 입력한 재고 기록까지 다시 계산한다", () => {
+  const first = {
+    ...intakeEvent("2026-04-06", 2),
+    id: "intake-first",
+    created_at: "2026-08-15T05:24:06Z"
+  };
+  const second = {
+    ...intakeEvent("2026-04-06", 1),
+    id: "intake-second",
+    quantity_before: 2,
+    quantity_after: 3,
+    created_at: "2026-08-15T05:26:40Z"
+  };
+  const preview = previewInventoryEventMutation(
+    { ...baseProduct, current_quantity: 3 },
+    [second, first],
+    first.id,
+    3
+  );
+
+  assert.deepEqual(preview, {
+    nextQuantity: 4,
+    followingEventCount: 1,
+    error: null
+  });
+});
+
+test("보정용 입고 기록을 삭제하면 남은 원장 기준 현재 재고를 계산한다", () => {
+  const first = {
+    ...intakeEvent("2026-04-06", 2),
+    id: "intake-first",
+    created_at: "2026-08-15T05:24:06Z"
+  };
+  const second = {
+    ...intakeEvent("2026-04-06", 1),
+    id: "intake-second",
+    quantity_before: 2,
+    quantity_after: 3,
+    created_at: "2026-08-15T05:26:40Z"
+  };
+  const preview = previewInventoryEventMutation(
+    { ...baseProduct, current_quantity: 3 },
+    [first, second],
+    second.id,
+    null
+  );
+
+  assert.deepEqual(preview, {
+    nextQuantity: 2,
+    followingEventCount: 0,
+    error: null
+  });
+});
+
+test("재고 정정 기록은 과거 수량 수정 후에도 당시 실제 재고 기준점을 유지한다", () => {
+  const intake = {
+    ...intakeEvent("2026-04-01", 2),
+    id: "intake-first",
+    created_at: "2026-04-01T00:00:00Z"
+  };
+  const adjustment: InventoryEvent = {
+    ...intakeEvent("2026-04-02", 1),
+    id: "adjustment-later",
+    event_type: "adjustment",
+    quantity_delta: -1,
+    quantity_before: 2,
+    quantity_after: 1,
+    created_at: "2026-04-02T00:00:00Z"
+  };
+  const preview = previewInventoryEventMutation(
+    { ...baseProduct, current_quantity: 1 },
+    [intake, adjustment],
+    intake.id,
+    3
+  );
+
+  assert.equal(preview.nextQuantity, 1);
+  assert.equal(preview.error, null);
 });
 
 test("미국식 날짜 입력은 ISO로 정규화하고 화면에는 미국식으로 표시한다", () => {

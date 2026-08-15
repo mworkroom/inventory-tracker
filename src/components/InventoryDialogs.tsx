@@ -4,6 +4,7 @@ import { ActionDialog } from "./ActionDialog";
 import { ActiveUsageDialog } from "./ActiveUsageDialog";
 import { ArchivedProductsDialog } from "./ArchivedProductsDialog";
 import { EventAmountDialog } from "./EventAmountDialog";
+import { InventoryHistoryDialog } from "./InventoryHistoryDialog";
 import { LearningStatusDialog } from "./LearningStatusDialog";
 import { ProductEditor } from "./ProductEditor";
 import { PurchaseDialog } from "./PurchaseDialog";
@@ -99,13 +100,30 @@ export function InventoryDialogs({
         />
       ) : null}
 
+      {controller.inventoryHistoryProduct ? (
+        <InventoryHistoryDialog
+          product={controller.inventoryHistoryProduct}
+          events={inventory.events}
+          busy={busy}
+          onClose={() => controller.setInventoryHistoryProduct(null)}
+          onEdit={(event) =>
+            controller.setEventCorrectionState({
+              product: controller.inventoryHistoryProduct!,
+              event
+            })
+          }
+        />
+      ) : null}
+
       {controller.eventCorrectionState ? (
         <EventAmountDialog
           product={controller.eventCorrectionState.product}
           event={controller.eventCorrectionState.event}
+          events={inventory.events}
           busy={busy}
           onClose={() => controller.setEventCorrectionState(null)}
           onSubmit={controller.saveEventAmount}
+          onDelete={controller.deleteInventoryEvent}
         />
       ) : null}
 

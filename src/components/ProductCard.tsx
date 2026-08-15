@@ -42,6 +42,7 @@ interface ProductCardProps {
   onPurchaseEdit: (purchase: InventoryPurchase) => void;
   onUsageCycleEdit: (cycle: UsageCycle) => void;
   onEventAmountEdit: (event: InventoryEvent) => void;
+  onInventoryHistoryView: () => void;
 }
 
 export function ProductCard({
@@ -63,7 +64,8 @@ export function ProductCard({
   onPurchaseHistoryView,
   onPurchaseEdit,
   onUsageCycleEdit,
-  onEventAmountEdit
+  onEventAmountEdit,
+  onInventoryHistoryView
 }: ProductCardProps) {
   const cardRef = useRef<HTMLElement>(null);
 
@@ -86,15 +88,6 @@ export function ProductCard({
     (event) => event.product_id === product.id
   );
   const productEvents = allProductEvents.slice(0, 5);
-  const latestRecordedEvent = allProductEvents.reduce<InventoryEvent | null>(
-    (latest, event) => {
-      if (!latest) return event;
-      const timeComparison = event.created_at.localeCompare(latest.created_at);
-      if (timeComparison !== 0) return timeComparison > 0 ? event : latest;
-      return event.id > latest.id ? event : latest;
-    },
-    null
-  );
   const productCycles = cycles
     .filter((cycle) => cycle.product_id === product.id)
     .slice(0, 3);
@@ -410,7 +403,7 @@ export function ProductCard({
                 ? "입고하면 통·병·봉 개수가 늘고, 다 쓰면 현재 제품 1개가 재고에서 빠집니다. 구매 기록과 입고 기록은 따로 표시됩니다."
                 : "첫 입고부터 재고 계산을 시작하거나, 이미 가진 개수만 현재 재고로 설정할 수 있습니다."
               : stockInitialized
-                ? "사용량을 알면 사용 기록, 실제 잔량만 알면 지금 남은 수량 확인, 입력 실수는 재고 정정을 사용합니다."
+                ? "사용량을 알면 사용 기록, 실제 잔량만 알면 지금 남은 수량 확인을 사용합니다. 입력 실수는 아래 재고 기록에서 수정할 수 있습니다."
                 : "첫 입고를 기록하거나 지금 가진 수량을 현재 재고로 설정하면 계산을 시작합니다."}
           </p>
 
@@ -440,9 +433,7 @@ export function ProductCard({
                       <strong>
                         {eventLabel(event, product.unit_label)}
                       </strong>
-                      {product.tracking_mode === "count" &&
-                      latestRecordedEvent?.id === event.id &&
-                      (event.event_type === "intake" ||
+                      {(event.event_type === "intake" ||
                         event.event_type === "use") ? (
                         <button
                           type="button"
@@ -462,6 +453,16 @@ export function ProductCard({
             ) : (
               <p className="history-empty">아직 기록이 없습니다.</p>
             )}
+            {allProductEvents.length > 0 ? (
+              <button
+                type="button"
+                className="full-history-button"
+                disabled={busy}
+                onClick={onInventoryHistoryView}
+              >
+                전체 재고 기록 {allProductEvents.length}건 보기
+              </button>
+            ) : null}
           </section>
 
           <section className="purchase-history-section">

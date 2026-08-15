@@ -57,6 +57,8 @@ export function useInventoryWorkspaceController(userId: string) {
     useState<UsageCycleState>(null);
   const [eventCorrectionState, setEventCorrectionState] =
     useState<EventCorrectionState>(null);
+  const [inventoryHistoryProduct, setInventoryHistoryProduct] =
+    useState<InventoryProduct | null>(null);
   const [learningStatusOpen, setLearningStatusOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -150,8 +152,24 @@ export function useInventoryWorkspaceController(userId: string) {
       amount
     );
     setExpandedId(saved.id);
+    setInventoryHistoryProduct((current) =>
+      current?.id === saved.id ? saved : current
+    );
     setEventCorrectionState(null);
     showToast("재고 기록 수량과 현재 재고를 함께 수정했습니다.");
+  }
+
+  async function deleteInventoryEvent() {
+    if (!eventCorrectionState) return;
+    const saved = await inventory.deleteInventoryEvent(
+      eventCorrectionState.event
+    );
+    setExpandedId(saved.id);
+    setInventoryHistoryProduct((current) =>
+      current?.id === saved.id ? saved : current
+    );
+    setEventCorrectionState(null);
+    showToast("재고 기록을 삭제하고 이후 재고를 다시 계산했습니다.");
   }
 
   async function deleteUsageCycle() {
@@ -247,6 +265,8 @@ export function useInventoryWorkspaceController(userId: string) {
     setUsageCycleState,
     eventCorrectionState,
     setEventCorrectionState,
+    inventoryHistoryProduct,
+    setInventoryHistoryProduct,
     learningStatusOpen,
     setLearningStatusOpen,
     archivedOpen,
@@ -262,6 +282,7 @@ export function useInventoryWorkspaceController(userId: string) {
     saveUsageCycle,
     saveActiveUsage,
     saveEventAmount,
+    deleteInventoryEvent,
     deleteUsageCycle,
     deletePurchase,
     archiveEditedProduct,

@@ -99,6 +99,9 @@ export function InventoryList({
         onEventAmountEdit={(event) =>
           controller.setEventCorrectionState({ product, event })
         }
+        onInventoryHistoryView={() =>
+          controller.setInventoryHistoryProduct(product)
+        }
       />
     );
   }
