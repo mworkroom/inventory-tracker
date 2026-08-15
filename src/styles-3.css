@@ -397,6 +397,10 @@
     padding: 13px 14px;
   }
 
+  .product-card {
+    scroll-margin-top: 86px;
+  }
+
   .product-details {
     padding: 13px 14px 14px;
   }

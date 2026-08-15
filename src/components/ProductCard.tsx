@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   eventLabel,
   formatApproxDays,
@@ -59,6 +60,23 @@ export function ProductCard({
   onUsageCycleEdit,
   onEventAmountEdit
 }: ProductCardProps) {
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!expanded) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start"
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [expanded]);
+
   const allProductEvents = events.filter(
     (event) => event.product_id === product.id
   );
@@ -129,7 +147,10 @@ export function ProductCard({
           : "첫 입고를 기록하거나 현재 재고를 설정하면 재고 계산을 시작합니다.";
 
   return (
-    <article className={`product-card${expanded ? " expanded" : ""}`}>
+    <article
+      ref={cardRef}
+      className={`product-card${expanded ? " expanded" : ""}`}
+    >
       <button
         type="button"
         className="product-summary"

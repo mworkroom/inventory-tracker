@@ -129,12 +129,10 @@ export function InventoryList({
             const hasExpandedProduct = group.products.some(
               (product) => product.id === controller.expandedId
             );
-            const shouldOpenByDefault =
-              controller.filter === "attention" || attentionCount > 0;
             const isGroupOpen =
               Boolean(controller.query.trim()) ||
               hasExpandedProduct ||
-              (groupOpenOverrides[groupStateKey] ?? shouldOpenByDefault);
+              (groupOpenOverrides[groupStateKey] ?? false);
 
             return (
               <section key={group.key} className="store-group">

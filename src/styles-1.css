@@ -413,6 +413,7 @@ button:disabled {
 
 .product-card {
   overflow: hidden;
+  scroll-margin-top: 94px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
