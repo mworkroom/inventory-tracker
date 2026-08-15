@@ -27,6 +27,11 @@ import {
   getProductStoreIds
 } from "../inventoryStores";
 import { groupByStore } from "../../hooks/useInventoryViewModel";
+import {
+  formatActiveMeta,
+  formatConsumptionAmount,
+  formatPurchaseForecast
+} from "../productPresentation";
 
 const baseProduct: InventoryProduct = {
   id: "product-1",
@@ -574,4 +579,35 @@ test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분�
   );
   assert.equal(usageEstimate.forecastSource, "usage");
   assert.equal(getInventoryAttentionKind(usageProduct, usageEstimate), "usage");
+});
+
+test("제품 카드 보충 정보는 괄호를 쓰고 날짜 뒤 정보는 쉼표로 구분한다", () => {
+  assert.equal(
+    formatConsumptionAmount(
+      {
+        source: "purchase",
+        monthlyAmount: 24.77,
+        monthlyUnit: "ml",
+        monthlyPackageCount: 0.5,
+        annualAmount: 297.24,
+        sampleCount: 8,
+        observationDays: 365,
+        inferredSizeRecordCount: 0,
+        excludedSizeRecordCount: 0,
+        recommendedPurchaseQuantity: 6,
+        expectedStockOnSaleDate: 1
+      },
+      "통"
+    ),
+    "약 24.77ml/월 (약 0.5통/월)"
+  );
+  assert.equal(formatPurchaseForecast("2026-04-03", 12), "4/3/2026, 12일 후");
+  assert.equal(
+    formatActiveMeta({
+      ...baseProduct,
+      active_opened_on: "2026-04-03",
+      active_consumer_count: 2
+    }),
+    "4/3/2026, 2명 사용"
+  );
 });
