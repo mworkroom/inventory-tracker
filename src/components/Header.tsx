@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshIcon, SettingsIcon } from "./Icons";
+import { HouseIcon, RefreshIcon, SettingsIcon } from "./Icons";
 
 interface HeaderProps {
   email: string | null;
@@ -33,7 +33,10 @@ export function Header({
 
   return (
     <header className="topbar">
-      <h1>우리집 재고</h1>
+      <h1>
+        <HouseIcon className="app-title-icon" />
+        <span>우리집 재고</span>
+      </h1>
       <div className="topbar-actions">
         <button type="button" className="topbar-button" disabled={busy} onClick={onAdd}>
           <span aria-hidden="true">＋</span>

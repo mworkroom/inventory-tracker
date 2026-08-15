@@ -106,23 +106,23 @@ export function ProductCard({
           ? "재고 여유"
           : "재고 미설정";
   const statusTitle = inventoryAttentionKind === "quantity"
-    ? "현재 재고가 알림 기준에 도달했어요"
+    ? "재고가 얼마 안 남았어요"
     : inventoryAttentionKind === "usage"
-      ? "예상 소진 시기가 가까워요"
+      ? "거의 다 써가요"
       : repurchaseDue
         ? "평소 재구매 시기가 가까워요"
         : stockInitialized
-          ? "현재 재고는 여유 있어요"
-          : "현재 재고를 아직 설정하지 않았어요";
+          ? "재고는 충분해요"
+          : "재고를 설정해 주세요";
   const statusDescription = inventoryAttentionKind === "quantity"
-    ? `현재 재고가 알림 기준 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
+    ? `재고가 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
     : inventoryAttentionKind === "usage" && estimate.remainingDays !== null
       ? `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
       : repurchaseDue && purchaseStats.nextPurchaseDate
-        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)} · 과거 구매일과 실제 입고일을 기준으로 한 알림입니다.`
+        ? `${formatPurchaseForecast(purchaseStats.nextPurchaseDate, purchaseStats.daysUntilNextPurchase)}`
         : stockInitialized
           ? estimate.forecastSource === "usage" && estimate.remainingDays !== null
-            ? `현재 사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
+            ? `사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
             : isCycle
               ? "개봉일과 다 쓴 날 기록을 쌓으면 실제 사용 기간을 계산합니다."
               : "서로 다른 날짜의 사용 기록을 쌓으면 실제 사용 속도를 계산합니다."
@@ -145,7 +145,7 @@ export function ProductCard({
             <strong>{product.name}</strong>
           </span>
           <span className="product-summary-meta">
-            {stockInitialized ? `현재 ${currentMeta}` : currentMeta}
+            {stockInitialized ? `${currentMeta}` : currentMeta}
             {hasActiveProduct ? " · 사용 중" : ""}
           </span>
         </span>
@@ -182,7 +182,7 @@ export function ProductCard({
             <div className="forecast-section-heading">
               <div>
                 <h3>재고·사용 기준</h3>
-                <p>현재 재고와 실제 사용 기록으로 소진 시기를 봅니다.</p>
+
               </div>
               <span className={`forecast-status ${inventoryAttentionKind ? "urgent" : "neutral"}`}>
                 {inventoryAttentionKind === "quantity"
@@ -197,9 +197,9 @@ export function ProductCard({
             <dl className="product-info forecast-info">
               {isCycle ? (
                 <>
-                  <InfoRow label="현재 제품" value={activeMeta} />
+                  <InfoRow label="사용 현황" value={activeMeta} />
                   <InfoRow
-                    label="학습한 사용 주기"
+                    label="평균 사용 주기"
                     value={
                       estimate.expectedCycleDays === null
                         ? "첫 소진 기록을 기다리는 중"
@@ -246,7 +246,6 @@ export function ProductCard({
             <div className="forecast-section-heading">
               <div>
                 <h3>재구매 간격 기준</h3>
-                <p>과거 구매일과 앞으로의 입고일을 함께 봅니다.</p>
               </div>
               <span className={`forecast-status ${repurchaseDue ? "repurchase" : "neutral"}`}>
                 {repurchaseDue
@@ -258,7 +257,7 @@ export function ProductCard({
             </div>
             <dl className="product-info forecast-info">
               <InfoRow
-                label="기준 날짜"
+                label="최근 구매일"
                 value={
                   purchaseStats.purchaseDateCount > 0
                     ? `${purchaseStats.purchaseDateCount}개 · 최근 ${formatDate(purchaseStats.lastPurchasedOn)}`
@@ -362,9 +361,7 @@ export function ProductCard({
           >
             과거 구매일 추가
           </button>
-          <p className="purchase-action-note">
-            현재 재고와 무관한 과거 날짜만 보충합니다.
-          </p>
+ 
 
           <section className="history-section">
             <div className="section-heading">

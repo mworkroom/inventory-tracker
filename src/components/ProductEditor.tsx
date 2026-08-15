@@ -254,9 +254,7 @@ export function ProductEditor({
                   </button>
                 ))}
               </div>
-              <span className="field-hint">
-                구매할 수 있는 쇼핑몰을 모두 선택합니다. 선택하지 않아도 저장할 수 있습니다.
-              </span>
+ 
             </div>
           </section>
 

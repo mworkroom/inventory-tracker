@@ -165,7 +165,7 @@
   padding: 11px 12px;
   border-radius: var(--radius);
   background: var(--accent-soft);
-  color: #087da8;
+  color: #000000;
   font-size: var(--font-size-sm);
 }
 
@@ -345,6 +345,11 @@
 
   .topbar h1 {
     font-size: var(--font-size-xl);
+  }
+
+  .app-title-icon {
+    width: 24px;
+    height: 24px;
   }
 
   .topbar-button {

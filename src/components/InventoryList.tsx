@@ -8,7 +8,7 @@ import {
 } from "../lib/inventory";
 import type { InventoryProduct } from "../types";
 import { GroupByMenu } from "./GroupByMenu";
-import { ChevronIcon } from "./Icons";
+import { CategoryIcon, ChevronIcon, StoreIcon } from "./Icons";
 import { ProductCard } from "./ProductCard";
 
 interface InventoryListProps {
@@ -153,12 +153,22 @@ export function InventoryList({
                     }}
                   >
                     <span className="store-group-label">
-                      <strong>{group.name}</strong>
-                      <span>
-                        {group.products.length}개 · 확인 {attentionCount}
+                      {viewMode === "category" ? (
+                        <CategoryIcon
+                          category={group.name}
+                          className="category-icon"
+                        />
+                      ) : (
+                        <StoreIcon store={group.name} className="store-icon" />
+                      )}
+                      <span className="store-group-copy">
+                        <strong>{group.name}</strong>
+                        <span>
+                          {group.products.length}개 · 확인 {attentionCount}
+                        </span>
                       </span>
                     </span>
-                    <ChevronIcon />
+                    <ChevronIcon className="store-group-chevron" />
                   </button>
                 </h2>
                 {isGroupOpen ? (
