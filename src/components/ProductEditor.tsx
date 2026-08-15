@@ -12,6 +12,8 @@ import { PRODUCT_CATEGORIES } from "../types";
 import { CloseIcon } from "./Icons";
 import { DateInput } from "./DateInput";
 
+const ALL_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
+
 interface ProductEditorProps {
   product: InventoryProduct | null;
   stores: InventoryStore[];
@@ -64,6 +66,24 @@ export function ProductEditor({
     }));
   }
 
+  function selectUsageSchedule(seasonal: boolean) {
+    setDraft((current) => ({
+      ...current,
+      activeMonths: seasonal
+        ? current.activeMonths.length === 12 ? [] : current.activeMonths
+        : ALL_MONTHS
+    }));
+  }
+
+  function toggleActiveMonth(month: number) {
+    setDraft((current) => ({
+      ...current,
+      activeMonths: current.activeMonths.includes(month)
+        ? current.activeMonths.filter((activeMonth) => activeMonth !== month)
+        : [...current.activeMonths, month].sort((a, b) => a - b)
+    }));
+  }
+
   function selectTrackingMode(mode: TrackingMode) {
     setDraft((current) => {
       if (mode === current.trackingMode) return current;
@@ -99,6 +119,11 @@ export function ProductEditor({
 
     if (!draft.unitLabel.trim()) {
       setFormError("재고 단위를 입력해주세요.");
+      return;
+    }
+
+    if (draft.activeMonths.length === 0) {
+      setFormError("특정 달에만 사용한다면 사용하는 달을 한 달 이상 선택해주세요.");
       return;
     }
 
@@ -360,6 +385,51 @@ export function ProductEditor({
             </section>
           ) : null}
 
+          <section className="form-section usage-schedule-form-section">
+            <div className="form-section-heading-copy">
+              <h3>사용 시기</h3>
+              <p>계절 제품은 실제로 사용하는 달만 소비 속도와 구매 추천에 포함합니다.</p>
+            </div>
+            <div className="usage-schedule-picker" role="group" aria-label="제품 사용 시기">
+              <button
+                type="button"
+                className={draft.activeMonths.length === 12 ? "selected" : ""}
+                aria-pressed={draft.activeMonths.length === 12}
+                onClick={() => selectUsageSchedule(false)}
+              >
+                연중 사용
+              </button>
+              <button
+                type="button"
+                className={draft.activeMonths.length < 12 ? "selected" : ""}
+                aria-pressed={draft.activeMonths.length < 12}
+                onClick={() => selectUsageSchedule(true)}
+              >
+                특정 달에만 사용
+              </button>
+            </div>
+            {draft.activeMonths.length < 12 ? (
+              <fieldset className="month-picker">
+                <legend>사용하는 달</legend>
+                <div>
+                  {ALL_MONTHS.map((month) => (
+                    <label key={month} className="month-option">
+                      <input
+                        type="checkbox"
+                        checked={draft.activeMonths.includes(month)}
+                        onChange={() => toggleActiveMonth(month)}
+                      />
+                      <span>{month}월</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
+            <p className="field-hint">
+              구매한 달이나 세일 시기와는 별개입니다. 날씨에 따라 달라지면 평소 사용하는 달을 기준으로 선택해주세요.
+            </p>
+          </section>
+
           <section className="form-section">
             <h3>재고 알림 기준</h3>
             <div className="form-grid two-columns">
@@ -396,7 +466,7 @@ export function ProductEditor({
           <section className="form-section purchase-plan-form-section">
             <div className="form-section-heading-copy">
               <h3>세일 구매 계획 · 선택</h3>
-              <p>정기 세일 때 몇 개를 살지 월평균 소비량과 현재 재고로 계산합니다.</p>
+              <p>정기 세일 때 몇 개를 살지 사용 시기를 반영한 소비량과 현재 재고로 계산합니다.</p>
             </div>
             <div className="form-grid three-columns">
               <label>
@@ -582,6 +652,10 @@ function makeDraft(product: InventoryProduct | null): ProductDraft {
         ? ""
         : String(product.purchase_coverage_months),
     purchaseSafetyQuantity: String(product?.purchase_safety_quantity ?? 0),
+    activeMonths:
+      product?.active_months?.length
+        ? [...product.active_months].sort((a, b) => a - b)
+        : ALL_MONTHS,
     notes: product?.notes || ""
   };
 }

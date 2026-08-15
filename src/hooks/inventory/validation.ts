@@ -109,6 +109,14 @@ export function normalizeCategory(
 }
 
 export function validateCycleProductDraft(draft: ProductDraft): void {
+  const activeMonths = [...new Set(draft.activeMonths)].sort((a, b) => a - b);
+  if (
+    activeMonths.length === 0 ||
+    activeMonths.length !== draft.activeMonths.length ||
+    activeMonths.some((month) => !Number.isInteger(month) || month < 1 || month > 12)
+  ) {
+    throw new Error("사용 시기는 1~12월 중 한 달 이상 선택해주세요.");
+  }
   if (draft.trackingMode !== "cycle") return;
   if (!draft.packageSize.trim()) {
     throw new Error("제품 1개의 전체 용량을 입력해주세요.");

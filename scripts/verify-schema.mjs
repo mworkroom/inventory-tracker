@@ -21,7 +21,8 @@ assert.deepEqual(
     "20260726020940_add_product_shopping_malls.sql",
     "20260726021227_add_product_store_foreign_key_indexes.sql",
     "20260815042204_add_purchase_planning.sql",
-  "20260815144215_replay_inventory_event_corrections.sql"
+    "20260815144215_replay_inventory_event_corrections.sql",
+    "20260815163118_add_product_active_months.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -69,6 +70,13 @@ const eventReplaySql = await readFile(
   join(
     migrationsDirectory,
   "20260815144215_replay_inventory_event_corrections.sql"
+  ),
+  "utf8"
+);
+const activeMonthsSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260815163118_add_product_active_months.sql"
   ),
   "utf8"
 );
@@ -209,6 +217,27 @@ assert.match(
   purchasePlanningSql,
   /add column next_sale_on date[\s\S]*?add column purchase_coverage_months integer[\s\S]*?add column purchase_safety_quantity integer not null default 0/,
   "세일 구매 계획에 필요한 열이 없습니다."
+);
+
+assert.match(
+  activeMonthsSql,
+  /add column active_months integer\[\]/,
+  "계절 제품의 사용 월을 저장하는 열이 없습니다."
+);
+assert.match(
+  activeMonthsSql,
+  /inventory_products_active_months_valid[\s\S]*?cardinality\(active_months\) between 1 and 11[\s\S]*?active_months <@ array\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12\]/,
+  "사용 월 범위를 제한하는 데이터베이스 제약이 없습니다."
+);
+assert.match(
+  activeMonthsSql,
+  /create function public\.create_inventory_product_with_stores\([\s\S]*?p_active_months integer\[\][\s\S]*?set active_months = v_active_months/,
+  "제품 생성 RPC가 사용 시기를 저장하지 않습니다."
+);
+assert.match(
+  activeMonthsSql,
+  /create function public\.update_inventory_product_with_stores\([\s\S]*?p_active_months integer\[\][\s\S]*?set active_months = v_active_months/,
+  "제품 수정 RPC가 사용 시기를 저장하지 않습니다."
 );
 assert.match(
   purchasePlanningSql,

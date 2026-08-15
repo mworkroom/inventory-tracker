@@ -9,6 +9,8 @@ import type {
 } from "../types";
 
 const DAY_MS = 86_400_000;
+const AVERAGE_DAYS_PER_MONTH = 30.4375;
+const AVERAGE_MONTH_DAYS = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export function todayIso(): string {
   const now = new Date();
@@ -283,11 +285,19 @@ function estimateCycleProduct(
         ? product.package_size / cycle.package_size
         : 1;
 
-    return cycle.duration_days * historicalPeople * capacityRatio / currentPeople;
+    const activeDuration = product.active_months
+      ? countActiveDays(
+          cycle.opened_on,
+          addDays(cycle.finished_on, 1),
+          product.active_months
+        )
+      : cycle.duration_days;
+    return activeDuration * historicalPeople * capacityRatio / currentPeople;
   });
 
   const expectedCycleDays = median(adjustedDurations);
   let remainingDays: number | null = null;
+  let estimatedOutDate: string | null = null;
 
   if (expectedCycleDays !== null && expectedCycleDays > 0) {
     const hasActiveProduct = Boolean(product.active_opened_on);
@@ -298,22 +308,24 @@ function estimateCycleProduct(
     let activeRemainingDays = 0;
 
     if (product.active_opened_on) {
-      const elapsedDays = Math.max(
-        0,
-        daysBetween(product.active_opened_on, today)
+      const elapsedDays = countActiveDays(
+        product.active_opened_on,
+        today,
+        product.active_months
       );
       activeRemainingDays = Math.max(0, expectedCycleDays - elapsedDays);
     }
 
-    remainingDays = hasActiveProduct
+    const remainingActiveDays = hasActiveProduct
       ? activeRemainingDays + unopenedUnits * expectedCycleDays
       : product.current_quantity * expectedCycleDays;
+    estimatedOutDate = addActiveDays(
+      today,
+      Math.max(0, Math.ceil(remainingActiveDays)),
+      product.active_months
+    );
+    remainingDays = daysBetween(today, estimatedOutDate);
   }
-
-  const estimatedOutDate =
-    remainingDays === null
-      ? null
-      : addDays(today, Math.max(0, Math.ceil(remainingDays)));
 
   const perPersonDailyCapacity =
     product.package_size && expectedCycleDays
@@ -360,7 +372,11 @@ function estimateDecrementProduct(
   if (samples.length >= 2) {
     const intervals: number[] = [];
     for (let index = 1; index < samples.length; index += 1) {
-      const interval = daysBetween(samples[index - 1].date, samples[index].date);
+      const interval = countActiveDays(
+        samples[index - 1].date,
+        samples[index].date,
+        product.active_months
+      );
       if (interval > 0) intervals.push(interval);
     }
 
@@ -371,14 +387,20 @@ function estimateDecrementProduct(
     }
   }
 
-  const remainingDays =
+  const remainingActiveDays =
     daysPerUnit === null
       ? null
       : Math.max(0, product.current_quantity * daysPerUnit);
-  const estimatedOutDate =
-    remainingDays === null
-      ? null
-      : addDays(today, Math.max(0, Math.ceil(remainingDays)));
+  const estimatedOutDate = remainingActiveDays === null
+    ? null
+    : addActiveDays(
+        today,
+        Math.max(0, Math.ceil(remainingActiveDays)),
+        product.active_months
+      );
+  const remainingDays = estimatedOutDate === null
+    ? null
+    : daysBetween(today, estimatedOutDate);
 
   return {
     isUrgent: false,
@@ -465,18 +487,20 @@ export function calculateConsumptionStats(
   estimate: ProductEstimate,
   today = todayIso()
 ): ConsumptionStats {
-  const usageBased = usageBasedConsumption(product, estimate);
+  const usageBased = usageBasedConsumption(product, estimate, today);
   const base = usageBased ?? purchaseBasedConsumption(
     product,
     purchases,
     events,
     today
   );
-  const monthlyPackageCount = base.monthlyPackageCount;
+  const dailyPackageCount = base.activeMonthlyPackageCount === null
+    ? null
+    : base.activeMonthlyPackageCount / AVERAGE_DAYS_PER_MONTH;
   const hasPurchasePlan = Boolean(
     product.next_sale_on &&
     product.purchase_coverage_months &&
-    monthlyPackageCount !== null
+    dailyPackageCount !== null
   );
   let expectedStockOnSaleDate: number | null = null;
   let recommendedPurchaseQuantity: number | null = null;
@@ -485,20 +509,30 @@ export function calculateConsumptionStats(
     hasPurchasePlan &&
     product.next_sale_on &&
     product.purchase_coverage_months &&
-    monthlyPackageCount !== null
+    dailyPackageCount !== null
   ) {
-    const monthsUntilSale = Math.max(
-      0,
-      daysBetween(today, product.next_sale_on) / 30.4375
+    const usageDaysUntilSale = countActiveDays(
+      today,
+      product.next_sale_on,
+      product.active_months
     );
     expectedStockOnSaleDate = Math.max(
       0,
-      product.current_quantity - monthlyPackageCount * monthsUntilSale
+      product.current_quantity - dailyPackageCount * usageDaysUntilSale
+    );
+    const coverageEnd = addMonths(
+      product.next_sale_on,
+      product.purchase_coverage_months
+    );
+    const coverageUsageDays = countActiveDays(
+      product.next_sale_on,
+      coverageEnd,
+      product.active_months
     );
     recommendedPurchaseQuantity = Math.max(
       0,
       Math.ceil(
-        monthlyPackageCount * product.purchase_coverage_months +
+        dailyPackageCount * coverageUsageDays +
         (product.purchase_safety_quantity || 0) -
         expectedStockOnSaleDate
       )
@@ -514,7 +548,8 @@ export function calculateConsumptionStats(
 
 function usageBasedConsumption(
   product: InventoryProduct,
-  estimate: ProductEstimate
+  estimate: ProductEstimate,
+  today: string
 ): Omit<ConsumptionStats, "recommendedPurchaseQuantity" | "expectedStockOnSaleDate"> | null {
   if (
     product.tracking_mode === "cycle" &&
@@ -523,19 +558,18 @@ function usageBasedConsumption(
     estimate.expectedCycleDays &&
     estimate.expectedCycleDays > 0
   ) {
-    const monthlyPackageCount = 30.4375 / estimate.expectedCycleDays;
-    const monthlyAmount = monthlyPackageCount * product.package_size;
-    return {
-      source: "usage",
-      monthlyAmount,
-      monthlyUnit: product.capacity_unit,
-      monthlyPackageCount,
-      annualAmount: monthlyAmount * 12,
-      sampleCount: estimate.cycleSampleCount,
-      observationDays: null,
-      inferredSizeRecordCount: 0,
-      excludedSizeRecordCount: 0
-    };
+    return buildConsumptionStats(
+      product,
+      1 / estimate.expectedCycleDays,
+      product.package_size / estimate.expectedCycleDays,
+      product.capacity_unit,
+      "usage",
+      estimate.cycleSampleCount,
+      null,
+      0,
+      0,
+      today
+    );
   }
 
   if (
@@ -543,18 +577,19 @@ function usageBasedConsumption(
     estimate.daysPerUnit &&
     estimate.daysPerUnit > 0
   ) {
-    const monthlyAmount = 30.4375 / estimate.daysPerUnit;
-    return {
-      source: "usage",
-      monthlyAmount,
-      monthlyUnit: product.unit_label,
-      monthlyPackageCount: monthlyAmount,
-      annualAmount: monthlyAmount * 12,
-      sampleCount: estimate.useSampleCount,
-      observationDays: null,
-      inferredSizeRecordCount: 0,
-      excludedSizeRecordCount: 0
-    };
+    const dailyAmount = 1 / estimate.daysPerUnit;
+    return buildConsumptionStats(
+      product,
+      dailyAmount,
+      dailyAmount,
+      product.unit_label,
+      "usage",
+      estimate.useSampleCount,
+      null,
+      0,
+      0,
+      today
+    );
   }
 
   return null;
@@ -590,20 +625,29 @@ function purchaseBasedConsumption(
     (sum, purchase) => sum + purchase.package_count,
     0
   );
-  const monthlyPackageCount = totalPackages / observationDays * 30.4375;
+  const activeObservationDays = countActiveDays(
+    firstPurchaseOn,
+    firstTrackingEvent,
+    product.active_months
+  );
+  if (activeObservationDays <= 0) {
+    return emptyConsumptionStats(observationDays);
+  }
+  const dailyPackageCount = totalPackages / activeObservationDays;
 
   if (product.tracking_mode === "count") {
-    return {
-      source: "purchase",
-      monthlyAmount: monthlyPackageCount,
-      monthlyUnit: product.unit_label,
-      monthlyPackageCount,
-      annualAmount: monthlyPackageCount * 12,
-      sampleCount: historicalPurchases.length,
+    return buildConsumptionStats(
+      product,
+      dailyPackageCount,
+      dailyPackageCount,
+      product.unit_label,
+      "purchase",
+      historicalPurchases.length,
       observationDays,
-      inferredSizeRecordCount: 0,
-      excludedSizeRecordCount: 0
-    };
+      0,
+      0,
+      today
+    );
   }
 
   if (!product.package_size || !product.capacity_unit) {
@@ -630,15 +674,55 @@ function purchaseBasedConsumption(
     return emptyConsumptionStats(observationDays, excludedSizeRecordCount);
   }
 
-  const monthlyAmount = totalCapacity / observationDays * 30.4375;
-  const currentPackageMonthlyCount = monthlyAmount / product.package_size;
+  return buildConsumptionStats(
+    product,
+    dailyPackageCount,
+    totalCapacity / activeObservationDays,
+    product.capacity_unit,
+    "purchase",
+    historicalPurchases.length,
+    observationDays,
+    inferredSizeRecordCount,
+    excludedSizeRecordCount,
+    today
+  );
+}
+
+function buildConsumptionStats(
+  product: InventoryProduct,
+  dailyPackageCount: number,
+  dailyAmount: number,
+  monthlyUnit: string,
+  source: "usage" | "purchase",
+  sampleCount: number,
+  observationDays: number | null,
+  inferredSizeRecordCount: number,
+  excludedSizeRecordCount: number,
+  today: string
+): Omit<ConsumptionStats, "recommendedPurchaseQuantity" | "expectedStockOnSaleDate"> {
+  const annualUsageDays = averageActiveDaysPerYear(product.active_months);
+  const annualPackageCount = dailyPackageCount * annualUsageDays;
+  const annualAmount = dailyAmount * annualUsageDays;
+  const season = findNextUsageSeason(today, product.active_months);
+  const seasonUsageDays = season
+    ? countActiveDays(season.startOn, addDays(season.endOn, 1), product.active_months)
+    : null;
+
   return {
-    source: "purchase",
-    monthlyAmount,
-    monthlyUnit: product.capacity_unit,
-    monthlyPackageCount: currentPackageMonthlyCount,
-    annualAmount: monthlyAmount * 12,
-    sampleCount: historicalPurchases.length,
+    source,
+    monthlyAmount: annualAmount / 12,
+    monthlyUnit,
+    monthlyPackageCount: annualPackageCount / 12,
+    activeMonthlyAmount: dailyAmount * AVERAGE_DAYS_PER_MONTH,
+    activeMonthlyPackageCount: dailyPackageCount * AVERAGE_DAYS_PER_MONTH,
+    annualAmount,
+    annualPackageCount,
+    nextSeasonStartOn: season?.startOn ?? null,
+    nextSeasonEndOn: season?.endOn ?? null,
+    nextSeasonAmount: seasonUsageDays === null ? null : dailyAmount * seasonUsageDays,
+    nextSeasonPackageCount:
+      seasonUsageDays === null ? null : dailyPackageCount * seasonUsageDays,
+    sampleCount,
     observationDays,
     inferredSizeRecordCount,
     excludedSizeRecordCount
@@ -654,7 +738,14 @@ function emptyConsumptionStats(
     monthlyAmount: null,
     monthlyUnit: null,
     monthlyPackageCount: null,
+    activeMonthlyAmount: null,
+    activeMonthlyPackageCount: null,
     annualAmount: null,
+    annualPackageCount: null,
+    nextSeasonStartOn: null,
+    nextSeasonEndOn: null,
+    nextSeasonAmount: null,
+    nextSeasonPackageCount: null,
     sampleCount: 0,
     observationDays,
     inferredSizeRecordCount: 0,
@@ -767,6 +858,106 @@ export function usageCycleDurationDays(openedOn: string, finishedOn: string): nu
 export function addDays(iso: string, days: number): string {
   const date = new Date(isoToUtcMs(iso) + days * DAY_MS);
   return date.toISOString().slice(0, 10);
+}
+
+export function countActiveDays(
+  fromIso: string,
+  toIso: string,
+  activeMonths: number[] | null | undefined
+): number {
+  if (toIso <= fromIso) return 0;
+  const months = normalizedActiveMonths(activeMonths);
+  if (!months) return daysBetween(fromIso, toIso);
+
+  let count = 0;
+  for (let date = fromIso; date < toIso; date = addDays(date, 1)) {
+    if (months.has(Number(date.slice(5, 7)))) count += 1;
+  }
+  return count;
+}
+
+function addActiveDays(
+  iso: string,
+  days: number,
+  activeMonths: number[] | null | undefined
+): string {
+  const months = normalizedActiveMonths(activeMonths);
+  if (!months) return addDays(iso, days);
+
+  let date = iso;
+  let remaining = Math.max(0, days);
+  while (remaining > 0) {
+    date = addDays(date, 1);
+    if (months.has(Number(date.slice(5, 7)))) remaining -= 1;
+  }
+  return date;
+}
+
+function addMonths(iso: string, months: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const firstOfTarget = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(
+    firstOfTarget.getUTCFullYear(),
+    firstOfTarget.getUTCMonth() + 1,
+    0
+  )).getUTCDate();
+  return toIsoDate(
+    firstOfTarget.getUTCFullYear(),
+    firstOfTarget.getUTCMonth() + 1,
+    Math.min(day, lastDay)
+  )!;
+}
+
+function averageActiveDaysPerYear(
+  activeMonths: number[] | null | undefined
+): number {
+  const months = normalizedActiveMonths(activeMonths);
+  if (!months) {
+    return AVERAGE_MONTH_DAYS.reduce((sum, days) => sum + days, 0);
+  }
+  return [...months].reduce(
+    (sum, month) => sum + AVERAGE_MONTH_DAYS[month - 1],
+    0
+  );
+}
+
+function findNextUsageSeason(
+  today: string,
+  activeMonths: number[] | null | undefined
+): { startOn: string; endOn: string } | null {
+  const months = normalizedActiveMonths(activeMonths);
+  if (!months) return null;
+
+  const [year, month] = today.split("-").map(Number);
+  let startIndex = year * 12 + month - 1;
+  const monthAt = (index: number) => ((index % 12) + 12) % 12 + 1;
+
+  if (months.has(month)) {
+    while (months.has(monthAt(startIndex - 1))) startIndex -= 1;
+  } else {
+    while (!months.has(monthAt(startIndex))) startIndex += 1;
+  }
+
+  let endIndex = startIndex;
+  while (months.has(monthAt(endIndex))) endIndex += 1;
+
+  const monthStart = (index: number) => {
+    const date = new Date(Date.UTC(Math.floor(index / 12), index % 12, 1));
+    return date.toISOString().slice(0, 10);
+  };
+  return {
+    startOn: monthStart(startIndex),
+    endOn: addDays(monthStart(endIndex), -1)
+  };
+}
+
+function normalizedActiveMonths(
+  activeMonths: number[] | null | undefined
+): Set<number> | null {
+  if (!activeMonths || activeMonths.length === 0 || activeMonths.length === 12) {
+    return null;
+  }
+  return new Set(activeMonths);
 }
 
 export function formatDate(iso: string | null): string {

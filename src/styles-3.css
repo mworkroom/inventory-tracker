@@ -47,6 +47,86 @@
   outline-offset: 2px;
 }
 
+.usage-schedule-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.usage-schedule-picker button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 850;
+}
+
+.usage-schedule-picker button.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.usage-schedule-picker button:focus-visible,
+.month-option input:focus-visible + span {
+  outline: 3px solid rgba(149, 149, 149, 0.22);
+  outline-offset: 2px;
+}
+
+.month-picker {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.month-picker legend {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.month-picker > div {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.month-option {
+  position: relative;
+}
+
+.month-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.month-option span {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+
+.month-option input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .mode-card {
   display: flex;
   min-height: 86px;
@@ -487,6 +567,10 @@
 
   .mode-picker {
     grid-template-columns: 1fr;
+  }
+
+  .month-picker > div {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
