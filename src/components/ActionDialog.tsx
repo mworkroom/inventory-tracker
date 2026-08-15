@@ -227,7 +227,7 @@ export function ActionDialog({
               value={draft.occurredOn}
               onChange={(value) => update("occurredOn", value)}
             />
-            <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY로 입력합니다. 며칠 전에 한 일을 지금 기록해도 됩니다.</span>
+            <span className="field-hint">달력에서 선택하거나 직접 입력할 수 있습니다. 며칠 전에 한 일을 지금 기록해도 됩니다.</span>
           </label>
 
           {action === "adjustment" ? (

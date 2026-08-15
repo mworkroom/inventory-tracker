@@ -135,7 +135,7 @@ export function UsageCycleDialog({
                 value={draft.openedOn}
                 onChange={(value) => update("openedOn", value)}
               />
-              <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY</span>
+              <span className="field-hint">달력에서 선택하거나 직접 입력할 수 있습니다.</span>
             </label>
             <label>
               <span className="field-label">다 쓴 날</span>
@@ -145,7 +145,7 @@ export function UsageCycleDialog({
                 value={draft.finishedOn}
                 onChange={(value) => update("finishedOn", value)}
               />
-              <span className="field-hint">M/D/YYYY 또는 MM/DD/YYYY</span>
+              <span className="field-hint">달력에서 선택하거나 직접 입력할 수 있습니다.</span>
             </label>
           </div>
 

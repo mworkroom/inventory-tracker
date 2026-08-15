@@ -556,8 +556,6 @@
   box-sizing: border-box;
   padding: 0 12px;
   overflow: hidden;
-  -webkit-appearance: none;
-  appearance: none;
   font-size: var(--font-size-base);
 }
 

@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
 import type { InputHTMLAttributes } from "react";
-import { formatDateInput, parseDateInput } from "../lib/inventory";
 
 interface DateInputProps
   extends Omit<
@@ -23,75 +21,18 @@ export function DateInput({
   onKeyDown,
   ...rest
 }: DateInputProps) {
-  const [text, setText] = useState(() => formatDateInput(value));
-  const [invalid, setInvalid] = useState(false);
-
-  useEffect(() => {
-    setText(formatDateInput(value));
-    setInvalid(false);
-  }, [value]);
-
-  function isWithinBounds(iso: string): boolean {
-    return (!min || iso >= min) && (!max || iso <= max);
-  }
-
-  function commit(nextText: string): boolean {
-    if (!nextText.trim()) {
-      setInvalid(false);
-      onChange("");
-      return true;
-    }
-
-    const normalized = parseDateInput(nextText);
-    if (!normalized || !isWithinBounds(normalized)) {
-      setInvalid(true);
-      setText(nextText);
-      onChange("");
-      return false;
-    }
-
-    setInvalid(false);
-    setText(formatDateInput(normalized));
-    onChange(normalized);
-    return true;
-  }
-
-  function handleChange(nextText: string) {
-    setText(nextText);
-    setInvalid(false);
-
-    if (!nextText.trim()) {
-      onChange("");
-      return;
-    }
-
-    const normalized = parseDateInput(nextText);
-    if (normalized && isWithinBounds(normalized)) {
-      onChange(normalized);
-    }
-  }
-
   return (
     <input
       {...rest}
-      type="text"
+      type="date"
       className={className ? `date-input ${className}` : "date-input"}
-      inputMode="numeric"
+      min={min}
+      max={max}
       autoComplete="off"
-      placeholder="M/D/YYYY"
-      value={text}
-      aria-invalid={invalid || undefined}
-      onChange={(event) => handleChange(event.currentTarget.value)}
-      onBlur={(event) => {
-        commit(event.currentTarget.value);
-        onBlur?.(event);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && !commit(event.currentTarget.value)) {
-          event.preventDefault();
-        }
-        onKeyDown?.(event);
-      }}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
     />
   );
 }
