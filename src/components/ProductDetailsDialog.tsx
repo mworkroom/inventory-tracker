@@ -423,8 +423,9 @@ function PurchaseRecords({
             return (
               <li key={purchase.id}>
                 <button type="button" disabled={busy} onClick={() => onEdit(purchase)}>
-                  <span>{formatDate(purchase.purchased_on)}, {formatQuantity(purchase.package_count)}{product.unit_label}</span>
-                  <small>({storeName})</small>
+                  <span className="purchase-evidence-line">
+                    {formatDate(purchase.purchased_on)}, {formatQuantity(purchase.package_count)}{product.unit_label} <small>({storeName})</small>
+                  </span>
                 </button>
               </li>
             );

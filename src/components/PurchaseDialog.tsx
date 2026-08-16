@@ -565,11 +565,11 @@ function PurchaseHistoryList({
               {items.map((item) => (
                 <li key={item.id}>
                   <button type="button" disabled={busy} onClick={() => onEdit(item)}>
-                    <span className="purchase-history-date">
-                      {formatDate(item.purchased_on)}
-                      {(dateCounts.get(item.purchased_on) || 0) > 1 ? <small>같은 날 {dateCounts.get(item.purchased_on)}건</small> : null}
-                    </span>
-                    <span className="purchase-history-detail">
+                    <span className="purchase-history-line">
+                      <span className="purchase-history-date">
+                        {formatDate(item.purchased_on)}
+                        {(dateCounts.get(item.purchased_on) || 0) > 1 ? <small>같은 날 {dateCounts.get(item.purchased_on)}건</small> : null}
+                      </span>
                       <strong>{formatPurchaseAmount(item, product)}</strong>
                       <small>{storeById.get(item.store_id) || "쇼핑몰 미확인"}</small>
                     </span>

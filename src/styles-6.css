@@ -253,10 +253,9 @@
 }
 
 .purchase-history-year button {
-  display: grid;
+  display: flex;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  min-width: 0;
   align-items: center;
   padding: 11px 12px;
   border: 0;
@@ -270,10 +269,22 @@
   background: #f8f9fb;
 }
 
-.purchase-history-date,
-.purchase-history-detail {
-  display: grid;
-  gap: 3px;
+.purchase-history-line {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.purchase-history-date {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 5px;
+  font-size: var(--font-size-sm);
 }
 
 .purchase-history-date > small {
@@ -284,17 +295,20 @@
   color: #765a16;
 }
 
-.purchase-history-detail {
-  justify-items: end;
-}
-
-.purchase-history-date,
-.purchase-history-detail strong {
+.purchase-history-line > strong {
+  flex: 0 0 auto;
   font-size: var(--font-size-sm);
 }
 
-.purchase-history-date small,
-.purchase-history-detail small {
+.purchase-history-line > small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  font-size: var(--font-size-xs);
+}
+
+.purchase-history-date > small {
   color: var(--muted);
   font-size: var(--font-size-xs);
 }
@@ -318,12 +332,8 @@
     grid-template-columns: 1fr;
   }
 
-  .purchase-history-year button {
-    grid-template-columns: 1fr;
-  }
-
-  .purchase-history-detail {
-    justify-items: start;
+  .purchase-history-line {
+    gap: 6px;
   }
 }
 
@@ -605,6 +615,13 @@
   line-height: 1.4;
 }
 
+.evidence-list .purchase-evidence-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .evidence-list small {
   flex: 0 0 auto;
   color: var(--muted);
@@ -655,7 +672,6 @@
 }
 
 @media (max-width: 350px) {
-  .product-overview-grid,
   .key-statistics-grid,
   .records-actions {
     grid-template-columns: 1fr;
