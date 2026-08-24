@@ -302,7 +302,6 @@ function estimateCycleProduct(
   const recentCycles = [...cycles]
     .sort((a, b) => compareIsoDate(b.finished_on, a.finished_on))
     .slice(0, 5);
-  const currentPeople = Math.max(1, product.current_consumer_count || 1);
 
   const adjustedDurations = recentCycles.map((cycle) => {
     const historicalPeople = Math.max(1, cycle.consumer_count || 1);
@@ -321,7 +320,7 @@ function estimateCycleProduct(
           product.active_months
         )
       : cycle.duration_days;
-    return activeDuration * historicalPeople * capacityRatio / currentPeople;
+    return activeDuration * historicalPeople * capacityRatio;
   });
 
   const expectedCycleDays = median(adjustedDurations);
@@ -342,7 +341,12 @@ function estimateCycleProduct(
         today,
         product.active_months
       );
-      activeRemainingDays = Math.max(0, expectedCycleDays - elapsedDays);
+      const activePeople = Math.max(
+        1,
+        product.active_consumer_count || product.current_consumer_count || 1
+      );
+      const elapsedPersonDays = elapsedDays * activePeople;
+      activeRemainingDays = Math.max(0, expectedCycleDays - elapsedPersonDays);
     }
 
     const remainingActiveDays = hasActiveProduct
@@ -358,7 +362,7 @@ function estimateCycleProduct(
 
   const perPersonDailyCapacity =
     product.package_size && expectedCycleDays
-      ? product.package_size / (expectedCycleDays * currentPeople)
+      ? product.package_size / expectedCycleDays
       : null;
 
   return {

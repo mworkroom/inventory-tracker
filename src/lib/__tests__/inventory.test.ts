@@ -194,12 +194,29 @@ function purchase(
   };
 }
 
-test("두 명이 76일 쓴 1600ml 제품은 한 명 기준 약 152일로 보정한다", () => {
-  const estimate = estimateProduct(baseProduct, [], [cycle()], "2026-07-19");
+test("현재 저장 인원과 무관하게 두 명이 76일 쓴 제품을 한 명 기준 152일로 보정한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    current_consumer_count: 2
+  };
+  const estimate = estimateProduct(product, [], [cycle()], "2026-07-19");
   assert.equal(estimate.expectedCycleDays, 152);
   assert.equal(estimate.remainingDays, 152);
   assert.ok(estimate.perPersonDailyCapacity);
   assert.ok(Math.abs((estimate.perPersonDailyCapacity || 0) - 10.5263) < 0.001);
+});
+
+test("두 명의 완료 기록에서 파생한 월평균과 연간 필요량도 한 명 기준으로 유지한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    current_consumer_count: 2
+  };
+  const estimate = estimateProduct(product, [], [cycle()], "2026-07-19");
+  const stats = calculateConsumptionStats(product, [], [], estimate, "2026-07-19");
+
+  assert.equal(stats.source, "usage");
+  assert.ok(Math.abs((stats.monthlyAmount || 0) - 320.3947) < 0.01);
+  assert.ok(Math.abs((stats.annualAmount || 0) - 3844.7368) < 0.01);
 });
 
 test("개봉 후 지난 기간과 미개봉 1통을 각각 남은 기간에 반영한다", () => {
@@ -217,6 +234,25 @@ test("개봉 후 지난 기간과 미개봉 1통을 각각 남은 기간에 반�
   );
   assert.equal(estimate.expectedCycleDays, 160);
   assert.equal(estimate.remainingDays, 62 + 160);
+});
+
+test("두 명이 함께 쓰는 현재 제품은 경과일을 두 사람분 사용량으로 차감한다", () => {
+  const product: InventoryProduct = {
+    ...baseProduct,
+    current_quantity: 2,
+    current_consumer_count: 2,
+    active_opened_on: "2026-07-09",
+    active_consumer_count: 2
+  };
+  const estimate = estimateProduct(
+    product,
+    [],
+    [cycle({ duration_days: 160, consumer_count: 1 })],
+    "2026-07-19"
+  );
+
+  assert.equal(estimate.expectedCycleDays, 160);
+  assert.equal(estimate.remainingDays, 140 + 160);
 });
 
 test("쓸 때마다 수량 줄이기는 최근 사용 간격의 중앙값으로 남은 기간을 계산한다", () => {

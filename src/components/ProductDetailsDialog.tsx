@@ -259,7 +259,7 @@ function StatisticsPanel({
               />
               {estimate.perPersonDailyCapacity !== null && product.capacity_unit ? (
                 <InfoRow
-                  label="1인 사용량"
+                  label="하루 사용량"
                   value={`하루 약 ${formatDecimal(estimate.perPersonDailyCapacity)}${product.capacity_unit}`}
                 />
               ) : null}
