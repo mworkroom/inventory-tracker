@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(41);
+select plan(69);
 
 select has_table(
   'public',
@@ -32,6 +32,18 @@ select has_column(
   'active_months',
   'inventory products store optional active usage months'
 );
+select has_column(
+  'public',
+  'inventory_products',
+  'usage_tracking',
+  'inventory products store the new default usage recording workflow'
+);
+select has_column(
+  'public',
+  'inventory_products',
+  'usage_tracking_changed_on',
+  'inventory products can preserve the future-effective workflow change date'
+);
 select has_table(
   'public',
   'inventory_events',
@@ -56,6 +68,16 @@ select has_table(
   'public',
   'inventory_product_stores',
   'blank rebuild creates inventory_product_stores'
+);
+select has_table(
+  'public',
+  'inventory_consumption_baselines',
+  'blank rebuild creates recalled consumption baselines'
+);
+select has_table(
+  'public',
+  'inventory_product_sale_schedules',
+  'blank rebuild creates recurring product sale schedules'
 );
 
 select is(
@@ -105,6 +127,60 @@ select is(
   'authenticated clients cannot insert product shopping malls directly'
 );
 select is(
+  (
+    select relrowsecurity
+    from pg_class
+    where oid = 'public.inventory_consumption_baselines'::regclass
+  ),
+  true,
+  'RLS is enabled on recalled consumption baselines'
+);
+select is(
+  has_table_privilege(
+    'authenticated',
+    'public.inventory_consumption_baselines',
+    'SELECT'
+  ),
+  true,
+  'authenticated clients can read an allowed recalled consumption baseline'
+);
+select is(
+  has_table_privilege(
+    'authenticated',
+    'public.inventory_consumption_baselines',
+    'INSERT'
+  ),
+  false,
+  'stage 1 clients cannot write recalled consumption baselines directly'
+);
+select is(
+  (
+    select relrowsecurity
+    from pg_class
+    where oid = 'public.inventory_product_sale_schedules'::regclass
+  ),
+  true,
+  'RLS is enabled on recurring product sale schedules'
+);
+select is(
+  has_table_privilege(
+    'authenticated',
+    'public.inventory_product_sale_schedules',
+    'SELECT'
+  ),
+  true,
+  'authenticated clients can read allowed recurring product sale schedules'
+);
+select is(
+  has_table_privilege(
+    'authenticated',
+    'public.inventory_product_sale_schedules',
+    'INSERT'
+  ),
+  false,
+  'stage 1 clients cannot write recurring product sale schedules directly'
+);
+select is(
   has_function_privilege(
     'authenticated',
     'public.update_inventory_event_amount(uuid,numeric)',
@@ -139,6 +215,78 @@ select is(
   ),
   false,
   'anonymous clients cannot execute the replaying event delete RPC'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.create_inventory_product_with_schedules(uuid,text,text,text,numeric,integer,numeric,text,text,uuid[],text,integer,jsonb)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can execute observation-model product creation'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.create_inventory_product_with_schedules(uuid,text,text,text,numeric,integer,numeric,text,text,uuid[],text,integer,jsonb)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot execute observation-model product creation'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.update_inventory_product_with_schedules(uuid,text,text,text,numeric,integer,numeric,text,text,uuid[],text,integer,jsonb)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can execute observation-model product updates'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.update_inventory_product_with_schedules(uuid,text,text,text,numeric,integer,numeric,text,text,uuid[],text,integer,jsonb)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot execute observation-model product updates'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.upsert_inventory_consumption_baseline(uuid,date,date,numeric,integer,text)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can save a recalled consumption baseline'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.upsert_inventory_consumption_baseline(uuid,date,date,numeric,integer,text)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot save a recalled consumption baseline'
+);
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.delete_inventory_consumption_baseline(uuid)',
+    'EXECUTE'
+  ),
+  true,
+  'authenticated members can delete a recalled consumption baseline'
+);
+select is(
+  has_function_privilege(
+    'anon',
+    'public.delete_inventory_consumption_baseline(uuid)',
+    'EXECUTE'
+  ),
+  false,
+  'anonymous clients cannot delete a recalled consumption baseline'
 );
 
 insert into auth.users (id, email)
@@ -198,6 +346,15 @@ select results_eq(
   $$,
   $$ values (0::numeric, false) $$,
   'product creation does not invent dated stock history'
+);
+select results_eq(
+  $$
+    select usage_tracking
+    from public.inventory_products
+    where name = '대패삼겹'
+  $$,
+  $$ values ('decrement'::text) $$,
+  'the legacy count workflow maps to decrement usage tracking'
 );
 select results_eq(
   $$
@@ -313,6 +470,160 @@ select results_eq(
 
 select lives_ok(
   $$
+    select public.create_inventory_product_with_schedules(
+      p_workspace_id := '00000000-0000-0000-0000-000000000002'::uuid,
+      p_name := '관찰 모델 토너',
+      p_usage_tracking := 'decrement',
+      p_unit_label := '병',
+      p_low_stock_threshold := 1,
+      p_alert_days := 30,
+      p_package_size := 300,
+      p_capacity_unit := 'ml',
+      p_notes := null,
+      p_store_ids := array[
+        (
+          select id from public.inventory_stores
+          where name = '올리브영'
+        )
+      ],
+      p_category := '화장품',
+      p_purchase_safety_quantity := 1,
+      p_sale_schedules := jsonb_build_array(
+        jsonb_build_object(
+          'store_id', (
+            select id from public.inventory_stores
+            where name = '올리브영'
+          ),
+          'name', '올영세일',
+          'sale_month', 9,
+          'sale_day', 1
+        )
+      )
+    )
+  $$,
+  'the observation-model RPC creates a product and recurring sale atomically'
+);
+select results_eq(
+  $$
+    select
+      usage_tracking,
+      tracking_mode,
+      active_months is null,
+      next_sale_on is null,
+      purchase_coverage_months is null
+    from public.inventory_products
+    where name = '관찰 모델 토너'
+  $$,
+  $$ values ('decrement'::text, 'count'::text, true, true, true) $$,
+  'new products use the observation workflow and leave manual seasonal fields empty'
+);
+select results_eq(
+  $$
+    select schedule.name, schedule.sale_month, schedule.sale_day, store.name
+    from public.inventory_product_sale_schedules as schedule
+    join public.inventory_stores as store on store.id = schedule.store_id
+    join public.inventory_products as product on product.id = schedule.product_id
+    where product.name = '관찰 모델 토너'
+  $$,
+  $$ values ('올영세일'::text, 9::integer, 1::integer, '올리브영'::text) $$,
+  'recurring sale schedules retain event name, date and linked store'
+);
+select lives_ok(
+  $$
+    select public.upsert_inventory_consumption_baseline(
+      p_product_id := (
+        select id from public.inventory_products
+        where name = '관찰 모델 토너'
+      ),
+      p_started_on := '2026-05-01'::date,
+      p_ended_on := '2026-07-31'::date,
+      p_consumed_quantity := 1,
+      p_consumer_count := 1,
+      p_note := '정확한 사건이 아닌 회상 기준'
+    )
+  $$,
+  'a member can save one recalled baseline through the guarded RPC'
+);
+select results_eq(
+  $$
+    select
+      baseline.usage_tracking,
+      baseline.consumed_quantity,
+      baseline.quantity_unit,
+      baseline.package_size,
+      baseline.capacity_unit
+    from public.inventory_consumption_baselines as baseline
+    join public.inventory_products as product on product.id = baseline.product_id
+    where product.name = '관찰 모델 토너'
+  $$,
+  $$ values ('decrement'::text, 1::numeric, '병'::text, 300::numeric, 'ml'::text) $$,
+  'the recalled baseline snapshots the current usage interpretation and units'
+);
+select lives_ok(
+  $$
+    select public.update_inventory_product_with_schedules(
+      p_product_id := (
+        select id from public.inventory_products
+        where name = '관찰 모델 토너'
+      ),
+      p_name := '관찰 모델 토너',
+      p_usage_tracking := 'cycle',
+      p_unit_label := '병',
+      p_low_stock_threshold := 1,
+      p_alert_days := 30,
+      p_package_size := 300,
+      p_capacity_unit := 'ml',
+      p_notes := null,
+      p_store_ids := array[
+        (
+          select id from public.inventory_stores
+          where name = '올리브영'
+        )
+      ],
+      p_category := '화장품',
+      p_purchase_safety_quantity := 2,
+      p_sale_schedules := jsonb_build_array(
+        jsonb_build_object(
+          'store_id', (
+            select id from public.inventory_stores
+            where name = '올리브영'
+          ),
+          'name', '겨울 올영세일',
+          'sale_month', 12,
+          'sale_day', 1
+        )
+      )
+    )
+  $$,
+  'a product without an active cycle can change its future usage workflow'
+);
+select results_eq(
+  $$
+    select
+      product.usage_tracking,
+      product.tracking_mode,
+      product.usage_tracking_changed_on is not null,
+      schedule.name,
+      schedule.sale_month,
+      product.purchase_safety_quantity
+    from public.inventory_products as product
+    join public.inventory_product_sale_schedules as schedule
+      on schedule.product_id = product.id
+    where product.name = '관찰 모델 토너'
+  $$,
+  $$ values (
+    'cycle'::text,
+    'cycle'::text,
+    true,
+    '겨울 올영세일'::text,
+    12::integer,
+    2::integer
+  ) $$,
+  'workflow changes are dated and recurring schedules are atomically replaced'
+);
+
+select lives_ok(
+  $$
     select public.record_inventory_action(
       p_product_id := (
         select id
@@ -388,6 +699,15 @@ select lives_ok(
     )
   $$,
   'a cycle product can be created for historical event correction tests'
+);
+select results_eq(
+  $$
+    select usage_tracking
+    from public.inventory_products
+    where name = '히알루론산 크림 테스트'
+  $$,
+  $$ values ('cycle'::text) $$,
+  'the legacy cycle workflow remains synchronized with cycle usage tracking'
 );
 select lives_ok(
   $$
@@ -495,6 +815,17 @@ select throws_ok(
   '42501',
   '제품을 찾을 수 없거나 접근 권한이 없습니다.',
   'the RPC rejects an outsider even though it is security definer'
+);
+select throws_ok(
+  $$
+    select public.create_inventory_product_with_schedules(
+      p_workspace_id := '00000000-0000-0000-0000-000000000002'::uuid,
+      p_name := '외부인 제품'
+    )
+  $$,
+  '42501',
+  '이 작업 공간에 제품을 만들 권한이 없습니다.',
+  'the observation-model creation RPC rejects an outsider'
 );
 
 select * from finish();

@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
 import { formatQuantity, isStockInitialized } from "../lib/inventory";
 import { getProductStoreIds } from "../lib/inventoryStores";
+import { usageTrackingOf } from "../lib/observationAnalysis";
 import type {
   InventoryProduct,
+  InventoryProductSaleSchedule,
   InventoryStore,
-  ProductDraft,
   ProductCategory,
-  TrackingMode
+  ProductDraft,
+  SaleScheduleDraft,
+  UsageTracking
 } from "../types";
 import { PRODUCT_CATEGORIES } from "../types";
 import { CloseIcon } from "./Icons";
-import { DateInput } from "./DateInput";
-
-const ALL_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 interface ProductEditorProps {
   product: InventoryProduct | null;
   stores: InventoryStore[];
+  saleSchedules: InventoryProductSaleSchedule[];
   busy: boolean;
   canDelete: boolean;
   onClose: () => void;
@@ -28,6 +29,7 @@ interface ProductEditorProps {
 export function ProductEditor({
   product,
   stores,
+  saleSchedules,
   busy,
   canDelete,
   onClose,
@@ -35,15 +37,17 @@ export function ProductEditor({
   onArchive,
   onDelete
 }: ProductEditorProps) {
-  const [draft, setDraft] = useState<ProductDraft>(() => makeDraft(product));
+  const [draft, setDraft] = useState<ProductDraft>(() =>
+    makeDraft(product, saleSchedules)
+  );
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<"archive" | "delete" | null>(null);
 
   useEffect(() => {
-    setDraft(makeDraft(product));
+    setDraft(makeDraft(product, saleSchedules));
     setFormError(null);
     setConfirmAction(null);
-  }, [product]);
+  }, [product, saleSchedules]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -58,130 +62,68 @@ export function ProductEditor({
   }
 
   function toggleStore(storeId: string) {
-    setDraft((current) => ({
-      ...current,
-      storeIds: current.storeIds.includes(storeId)
-        ? current.storeIds.filter((id) => id !== storeId)
-        : [...current.storeIds, storeId]
-    }));
-  }
-
-  function selectUsageSchedule(seasonal: boolean) {
-    setDraft((current) => ({
-      ...current,
-      activeMonths: seasonal
-        ? current.activeMonths.length === 12 ? [] : current.activeMonths
-        : ALL_MONTHS
-    }));
-  }
-
-  function toggleActiveMonth(month: number) {
-    setDraft((current) => ({
-      ...current,
-      activeMonths: current.activeMonths.includes(month)
-        ? current.activeMonths.filter((activeMonth) => activeMonth !== month)
-        : [...current.activeMonths, month].sort((a, b) => a - b)
-    }));
-  }
-
-  function selectTrackingMode(mode: TrackingMode) {
     setDraft((current) => {
-      if (mode === current.trackingMode) return current;
-
-      if (mode === "cycle") {
-        return {
-          ...current,
-          trackingMode: mode,
-          unitLabel: "통",
-          packageSize: "",
-          capacityUnit: "ml"
-        };
-      }
-
+      const selected = current.storeIds.includes(storeId);
       return {
         ...current,
-        trackingMode: mode,
-        unitLabel: "개",
-        packageSize: "",
-        capacityUnit: ""
+        storeIds: selected
+          ? current.storeIds.filter((id) => id !== storeId)
+          : [...current.storeIds, storeId],
+        saleSchedules: selected
+          ? current.saleSchedules.filter((schedule) => schedule.storeId !== storeId)
+          : current.saleSchedules
       };
     });
+  }
+
+  function addSaleSchedule() {
+    const storeId = draft.storeIds[0];
+    if (!storeId) {
+      setFormError("정기 세일을 추가하려면 먼저 쇼핑몰을 선택해주세요.");
+      return;
+    }
+    setFormError(null);
+    update("saleSchedules", [
+      ...draft.saleSchedules,
+      {
+        storeId,
+        name: "",
+        saleMonth: String(new Date().getMonth() + 1),
+        saleDay: "1"
+      }
+    ]);
+  }
+
+  function updateSaleSchedule(
+    index: number,
+    key: keyof SaleScheduleDraft,
+    value: string
+  ) {
+    update(
+      "saleSchedules",
+      draft.saleSchedules.map((schedule, scheduleIndex) =>
+        scheduleIndex === index ? { ...schedule, [key]: value } : schedule
+      )
+    );
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
-
     if (!draft.name.trim()) {
       setFormError("제품명을 입력해주세요.");
       return;
     }
-
     if (!draft.unitLabel.trim()) {
       setFormError("재고 단위를 입력해주세요.");
       return;
     }
-
-    if (draft.activeMonths.length === 0) {
-      setFormError("특정 달에만 사용한다면 사용하는 달을 한 달 이상 선택해주세요.");
-      return;
-    }
-
-    const lowStockThreshold = Number(draft.lowStockThreshold);
-    if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
-      setFormError("재고 알림 수량은 0 이상의 숫자로 입력해주세요.");
-      return;
-    }
-
-    if (draft.trackingMode === "cycle") {
-      if (!draft.packageSize.trim() || Number(draft.packageSize) <= 0) {
-        setFormError("제품 1개의 전체 용량을 입력해주세요.");
-        return;
-      }
-      if (!draft.capacityUnit.trim()) {
-        setFormError("제품 용량 단위를 입력해주세요.");
-        return;
-      }
-      if (draft.unitLabel.trim().toLowerCase() === draft.capacityUnit.trim().toLowerCase()) {
-        setFormError("재고 단위에는 통·병·봉처럼 포장 개수를 나타내는 말을 입력해주세요.");
-        return;
-      }
-      if (!Number.isInteger(lowStockThreshold)) {
-        setFormError("개봉일과 다 쓴 날만 기록하는 제품의 재고 알림 수량은 정수로 입력해주세요.");
-        return;
-      }
-    }
-
-    const hasSaleDate = Boolean(draft.nextSaleOn);
-    const hasCoverage = Boolean(draft.purchaseCoverageMonths.trim());
-    if (hasSaleDate !== hasCoverage) {
-      setFormError("다음 세일 날짜와 몇 개월치를 살지 함께 입력해주세요.");
-      return;
-    }
-    if (hasCoverage) {
-      const coverageMonths = Number(draft.purchaseCoverageMonths);
-      if (!Number.isInteger(coverageMonths) || coverageMonths < 1 || coverageMonths > 36) {
-        setFormError("구매할 기간은 1~36개월 사이의 정수로 입력해주세요.");
-        return;
-      }
-    }
-    const safetyQuantity = Number(draft.purchaseSafetyQuantity);
-    if (!Number.isInteger(safetyQuantity) || safetyQuantity < 0) {
-      setFormError("여유 재고는 0 이상의 정수로 입력해주세요.");
-      return;
-    }
-
     try {
-      await onSubmit({
-        ...draft,
-        unitLabel: draft.unitLabel.trim(),
-        capacityUnit:
-          draft.trackingMode === "cycle" ? draft.capacityUnit.trim() : "",
-        packageSize:
-          draft.trackingMode === "cycle" ? draft.packageSize : ""
-      });
+      await onSubmit(draft);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "제품을 저장하지 못했습니다.");
+      setFormError(
+        caught instanceof Error ? caught.message : "제품을 저장하지 못했습니다."
+      );
     }
   }
 
@@ -191,7 +133,6 @@ export function ProductEditor({
       setConfirmAction("archive");
       return;
     }
-
     setFormError(null);
     try {
       await onArchive();
@@ -207,7 +148,6 @@ export function ProductEditor({
       setConfirmAction("delete");
       return;
     }
-
     setFormError(null);
     try {
       await onDelete();
@@ -218,8 +158,9 @@ export function ProductEditor({
   }
 
   const isEdit = Boolean(product);
-  const isCycle = draft.trackingMode === "cycle";
-  const archiveDisabled = Boolean(product?.active_opened_on);
+  const isCycle = draft.usageTracking === "cycle";
+  const trackingLocked = Boolean(product?.active_opened_on);
+  const archiveDisabled = trackingLocked;
 
   return (
     <div
@@ -239,18 +180,10 @@ export function ProductEditor({
           <div>
             <h2 id="product-editor-title">{isEdit ? "제품 설정" : "제품 추가"}</h2>
             <p>
-              {isEdit
-                ? "제품 정보와 재고 알림 기준을 수정합니다."
-                : "제품 항목을 먼저 만들고 현재 재고는 나중에 연결할 수 있습니다."}
+              제품 사실과 앞으로의 구매 계획만 입력합니다. 사용 시기는 실제 기록에서 자동으로 계산합니다.
             </p>
           </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="닫기"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <button type="button" className="icon-button" aria-label="닫기" disabled={busy} onClick={onClose}>
             <CloseIcon />
           </button>
         </div>
@@ -263,7 +196,7 @@ export function ProductEditor({
               <input
                 value={draft.name}
                 autoFocus={!isEdit}
-                placeholder="예: 코코넛 오일"
+                placeholder="예: 더랩 세라 크림 50ml"
                 onChange={(event) => update("name", event.target.value)}
               />
             </label>
@@ -279,14 +212,8 @@ export function ProductEditor({
               </select>
             </label>
             <div className="shopping-mall-field">
-              <span className="field-label" id="shopping-mall-label">
-                쇼핑몰 · 복수 선택
-              </span>
-              <div
-                className="shopping-mall-options"
-                role="group"
-                aria-labelledby="shopping-mall-label"
-              >
+              <span className="field-label" id="shopping-mall-label">쇼핑몰 · 복수 선택</span>
+              <div className="shopping-mall-options" role="group" aria-labelledby="shopping-mall-label">
                 {stores.map((store) => (
                   <button
                     key={store.id}
@@ -299,144 +226,81 @@ export function ProductEditor({
                   </button>
                 ))}
               </div>
-
             </div>
           </section>
 
           <section className="form-section">
-            <h3>재고·사용 기록 방식</h3>
+            <h3>기본 사용 기록 방식</h3>
             <div className="mode-picker">
               <ModeButton
-                mode="count"
-                selected={draft.trackingMode === "count"}
-                disabled={isEdit}
+                mode="decrement"
+                selected={!isCycle}
+                disabled={trackingLocked}
                 symbol="−1"
-                title="쓸 때마다 수량 줄이기"
-                description="닭안심·달걀처럼 사용할 때마다 실제 남은 수량을 줄임"
-                onSelect={() => selectTrackingMode("count")}
+                title="사용량 차감"
+                description="쓸 때마다 실제 사용량을 기록"
+                onSelect={() => update("usageTracking", "decrement")}
               />
               <ModeButton
                 mode="cycle"
-                selected={draft.trackingMode === "cycle"}
-                disabled={isEdit}
+                selected={isCycle}
+                disabled={trackingLocked}
                 symbol="↻"
-                title="개봉일과 다 쓴 날만 기록"
-                description="오일·샴푸처럼 한 개를 열고 다 쓸 때만 기록"
-                onSelect={() => selectTrackingMode("cycle")}
+                title="개봉–소진 주기"
+                description="제품 한 개의 개봉일과 다 쓴 날을 기록"
+                onSelect={() => update("usageTracking", "cycle")}
               />
             </div>
-            {isEdit ? (
-              <p className="field-hint">
-                기존 기록의 단위가 바뀌지 않도록 등록 후 방식은 고정됩니다.
-              </p>
-            ) : null}
+            <p className="field-hint">
+              {trackingLocked
+                ? "진행 중인 개봉 주기를 끝낸 뒤 기록 방식을 바꿀 수 있습니다. 과거 기록은 그대로 보존됩니다."
+                : "기록 방식은 미래 기록에만 적용되며 재고 단위와는 별개입니다."}
+            </p>
           </section>
 
           <section className="form-section">
-            <h3>{isCycle ? "포장 단위 재고" : "개수 재고"}</h3>
+            <h3>재고와 제품 용량</h3>
             <div className="form-grid two-columns">
               <label>
                 <span className="field-label">재고 단위</span>
                 <input
                   value={draft.unitLabel}
-                  placeholder={isCycle ? "통, 병, 봉" : "개, 팩, 인분"}
+                  placeholder="통, 병, 봉, 인분, 개"
                   onChange={(event) => update("unitLabel", event.target.value)}
                 />
-                {isCycle ? (
-                  <span className="field-hint">ml·g가 아니라 재고로 세는 통·병·봉 단위를 입력합니다.</span>
-                ) : null}
+                <span className="field-hint">실제로 세고 구매하는 단위를 입력합니다.</span>
               </label>
               {isEdit ? <ReadOnlyQuantity product={product} /> : null}
             </div>
-            {!isEdit ? (
-              <p className="field-hint">
-                저장 후 첫 입고를 기록하거나 카드에서 현재 재고를 설정하면 계산을 시작합니다.
-              </p>
-            ) : null}
-          </section>
-
-          {isCycle ? (
-            <section className="form-section">
-              <h3>제품 1개 정보</h3>
-              <div className="form-grid two-columns">
-                <label>
-                  <span className="field-label">제품 1개 전체 용량</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={draft.packageSize}
-                    placeholder="예: 1600"
-                    onChange={(event) => update("packageSize", event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span className="field-label">제품 용량 단위</span>
-                  <input
-                    value={draft.capacityUnit}
-                    placeholder="ml, g"
-                    onChange={(event) => update("capacityUnit", event.target.value)}
-                  />
-                </label>
-              </div>
-              <p className="field-hint">
-                함께 사용하는 사람 수는 실제로 새 제품을 개봉할 때 입력합니다.
-              </p>
-            </section>
-          ) : null}
-
-          <section className="form-section usage-schedule-form-section">
-            <div className="form-section-heading-copy">
-              <h3>사용 시기</h3>
-              <p>계절 제품은 실제로 사용하는 달만 소비 속도와 구매 추천에 포함합니다.</p>
+            <div className="form-grid two-columns">
+              <label>
+                <span className="field-label">제품 1개 용량 · 선택</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={draft.packageSize}
+                  placeholder="예: 50"
+                  onChange={(event) => update("packageSize", event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="field-label">용량 단위 · 선택</span>
+                <input
+                  value={draft.capacityUnit}
+                  placeholder="ml, g"
+                  onChange={(event) => update("capacityUnit", event.target.value)}
+                />
+              </label>
             </div>
-            <div className="usage-schedule-picker" role="group" aria-label="제품 사용 시기">
-              <button
-                type="button"
-                className={draft.activeMonths.length === 12 ? "selected" : ""}
-                aria-pressed={draft.activeMonths.length === 12}
-                onClick={() => selectUsageSchedule(false)}
-              >
-                연중 사용
-              </button>
-              <button
-                type="button"
-                className={draft.activeMonths.length < 12 ? "selected" : ""}
-                aria-pressed={draft.activeMonths.length < 12}
-                onClick={() => selectUsageSchedule(true)}
-              >
-                특정 달에만 사용
-              </button>
-            </div>
-            {draft.activeMonths.length < 12 ? (
-              <fieldset className="month-picker">
-                <legend>사용하는 달</legend>
-                <div>
-                  {ALL_MONTHS.map((month) => (
-                    <label key={month} className="month-option">
-                      <input
-                        type="checkbox"
-                        checked={draft.activeMonths.includes(month)}
-                        onChange={() => toggleActiveMonth(month)}
-                      />
-                      <span>{month}월</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            ) : null}
-            <p className="field-hint">
-              구매한 달이나 세일 시기와는 별개입니다. 날씨에 따라 달라지면 평소 사용하는 달을 기준으로 선택해주세요.
-            </p>
+            <p className="field-hint">용량과 단위는 둘 다 입력하거나 둘 다 비워둡니다.</p>
           </section>
 
           <section className="form-section">
             <h3>재고 알림 기준</h3>
             <div className="form-grid two-columns">
               <label>
-                <span className="field-label">
-                  소비 속도를 모를 때 몇 {draft.unitLabel || "단위"} 이하일 때?
-                </span>
+                <span className="field-label">소비 속도를 모를 때 몇 {draft.unitLabel || "단위"} 이하?</span>
                 <input
                   type="number"
                   min="0"
@@ -446,7 +310,7 @@ export function ProductEditor({
                 />
               </label>
               <label>
-                <span className="field-label">예상 소진 며칠 전부터 알릴까요?</span>
+                <span className="field-label">예상 소진 며칠 전부터 알림?</span>
                 <input
                   type="number"
                   min="1"
@@ -456,56 +320,93 @@ export function ProductEditor({
                 />
               </label>
             </div>
-            <p className="field-hint">
-              실제 사용 속도를 우선하고, 충분한 과거 구매량이 있으면 그 소비 속도를 사용합니다. 수량 기준은 소진 시기를 계산할 수 없을 때만 적용합니다.
-            </p>
+            <p className="field-hint">실제 사용을 우선하고, 실제 사용 전에는 회상 소비 기준, 둘 다 없으면 재고 수량 기준을 사용합니다.</p>
           </section>
 
           <section className="form-section purchase-plan-form-section">
             <div className="form-section-heading-copy">
-              <h3>세일 구매 계획 · 선택</h3>
-              <p>정기 세일 때 몇 개를 살지 사용 시기를 반영한 소비량과 현재 재고로 계산합니다.</p>
+              <h3>정기 세일 일정 · 선택</h3>
+              <p>반복되는 월·일, 쇼핑몰과 행사명만 등록합니다. 연도와 구매 수량은 앱이 계산합니다.</p>
             </div>
-            <div className="form-grid three-columns">
-              <label>
-                <span className="field-label">다음 세일 날짜</span>
-                <DateInput
-                  value={draft.nextSaleOn}
-                  onChange={(value) => update("nextSaleOn", value)}
+            {draft.saleSchedules.length ? (
+              <div className="sale-schedule-editor-list">
+                {draft.saleSchedules.map((schedule, index) => (
+                  <div className="sale-schedule-editor-row" key={schedule.id || index}>
+                    <label>
+                      <span className="field-label">쇼핑몰</span>
+                      <select
+                        value={schedule.storeId}
+                        onChange={(event) => updateSaleSchedule(index, "storeId", event.target.value)}
+                      >
+                        {draft.storeIds.map((storeId) => (
+                          <option key={storeId} value={storeId}>
+                            {stores.find((store) => store.id === storeId)?.name || "쇼핑몰"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="sale-schedule-name-field">
+                      <span className="field-label">행사명</span>
+                      <input
+                        value={schedule.name}
+                        placeholder="예: 올영세일"
+                        onChange={(event) => updateSaleSchedule(index, "name", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">월</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="12"
+                        step="1"
+                        value={schedule.saleMonth}
+                        onChange={(event) => updateSaleSchedule(index, "saleMonth", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">일</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        step="1"
+                        value={schedule.saleDay}
+                        onChange={(event) => updateSaleSchedule(index, "saleDay", event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary-button sale-schedule-remove"
+                      onClick={() => update(
+                        "saleSchedules",
+                        draft.saleSchedules.filter((_, scheduleIndex) => scheduleIndex !== index)
+                      )}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="field-hint">등록한 정기 세일 일정이 없습니다.</p>
+            )}
+            <button type="button" className="secondary-button" onClick={addSaleSchedule}>
+              정기 세일 추가
+            </button>
+            <label className="sale-safety-field">
+              <span className="field-label">세일 구매 후 남길 여유 재고</span>
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={draft.purchaseSafetyQuantity}
+                  onChange={(event) => update("purchaseSafetyQuantity", event.target.value)}
                 />
-              </label>
-              <label>
-                <span className="field-label">몇 개월치 구매?</span>
-                <div className="input-with-unit">
-                  <input
-                    type="number"
-                    min="1"
-                    max="36"
-                    step="1"
-                    value={draft.purchaseCoverageMonths}
-                    placeholder="예: 12"
-                    onChange={(event) => update("purchaseCoverageMonths", event.target.value)}
-                  />
-                  <span>개월</span>
-                </div>
-              </label>
-              <label>
-                <span className="field-label">여유 재고</span>
-                <div className="input-with-unit">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={draft.purchaseSafetyQuantity}
-                    onChange={(event) => update("purchaseSafetyQuantity", event.target.value)}
-                  />
-                  <span>{draft.unitLabel || "개"}</span>
-                </div>
-              </label>
-            </div>
-            <p className="field-hint">
-              구매 유형을 따로 고르지 않아도 됩니다. 입력하지 않으면 기존 재구매 간격만 참고합니다.
-            </p>
+                <span>{draft.unitLabel || "개"}</span>
+              </div>
+            </label>
           </section>
 
           <label className="form-section compact-section">
@@ -520,29 +421,17 @@ export function ProductEditor({
           {formError ? <p className="form-error">{formError}</p> : null}
 
           <div className="editor-actions">
-            <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>
-              취소
-            </button>
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? "저장 중…" : "저장"}
-            </button>
+            <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>취소</button>
+            <button type="submit" className="primary-button" disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
           </div>
 
           {isEdit ? (
             <section className="product-management-section">
-              <div className="product-management-heading">
-                <h3>제품 관리</h3>
-
-              </div>
-
+              <div className="product-management-heading"><h3>제품 관리</h3></div>
               <div className="product-management-action">
                 <div>
                   <strong>목록에서 숨기기</strong>
-                  <span>
-                    {archiveDisabled
-                      ? "현재 사용 중인 제품은 다 쓴 뒤 목록에서 숨길 수 있습니다."
-                      : "기본 목록에서만 숨기고 모든 재고·사용·구매 기록은 유지합니다."}
-                  </span>
+                  <span>{archiveDisabled ? "현재 사용 중인 제품은 다 쓴 뒤 숨길 수 있습니다." : "기록은 유지하고 기본 목록에서만 숨깁니다."}</span>
                 </div>
                 <button
                   type="button"
@@ -553,15 +442,10 @@ export function ProductEditor({
                   {confirmAction === "archive" ? "한 번 더 눌러 숨기기" : "목록에서 숨기기"}
                 </button>
               </div>
-
               <div className="product-management-action delete-action">
                 <div>
                   <strong>잘못 만든 제품 삭제</strong>
-                  <span>
-                    {canDelete
-                      ? "실사용·구매 기록이 없어 영구 삭제할 수 있습니다."
-                      : "실사용 또는 구매 기록이 있어 삭제할 수 없습니다. 목록에서 숨기기를 사용해주세요."}
-                  </span>
+                  <span>{canDelete ? "실사용·구매 기록이 없어 영구 삭제할 수 있습니다." : "기록이 있어 삭제할 수 없습니다."}</span>
                 </div>
                 <button
                   type="button"
@@ -589,7 +473,6 @@ function ReadOnlyQuantity({ product }: { product: InventoryProduct | null }) {
           ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
           : "재고 미설정"}
       </strong>
-
     </div>
   );
 }
@@ -603,7 +486,7 @@ function ModeButton({
   description,
   onSelect
 }: {
-  mode: TrackingMode;
+  mode: UsageTracking;
   selected: boolean;
   disabled: boolean;
   symbol: string;
@@ -621,39 +504,37 @@ function ModeButton({
       onClick={onSelect}
     >
       <span className="mode-symbol" aria-hidden="true">{symbol}</span>
-      <span>
-        <strong>{title}</strong>
-        <small>{description}</small>
-      </span>
+      <span><strong>{title}</strong><small>{description}</small></span>
     </button>
   );
 }
 
-function makeDraft(product: InventoryProduct | null): ProductDraft {
+function makeDraft(
+  product: InventoryProduct | null,
+  saleSchedules: InventoryProductSaleSchedule[]
+): ProductDraft {
   return {
     name: product?.name || "",
     category: product?.category || "미분류",
-    trackingMode: product?.tracking_mode || "count",
+    usageTracking: product ? usageTrackingOf(product) : "decrement",
     unitLabel: product?.unit_label || "개",
     lowStockThreshold: String(product?.low_stock_threshold ?? 1),
     alertDays: String(product?.alert_days ?? 30),
-    packageSize:
-      product?.package_size === null || product?.package_size === undefined
-        ? ""
-        : String(product.package_size),
+    packageSize: product?.package_size == null ? "" : String(product.package_size),
     capacityUnit: product?.capacity_unit || "",
     storeIds: product ? getProductStoreIds(product) : [],
-    nextSaleOn: product?.next_sale_on || "",
-    purchaseCoverageMonths:
-      product?.purchase_coverage_months === null ||
-      product?.purchase_coverage_months === undefined
-        ? ""
-        : String(product.purchase_coverage_months),
     purchaseSafetyQuantity: String(product?.purchase_safety_quantity ?? 0),
-    activeMonths:
-      product?.active_months?.length
-        ? [...product.active_months].sort((a, b) => a - b)
-        : ALL_MONTHS,
+    saleSchedules: product
+      ? saleSchedules
+          .filter((schedule) => schedule.product_id === product.id)
+          .map((schedule) => ({
+            id: schedule.id,
+            storeId: schedule.store_id || "",
+            name: schedule.name,
+            saleMonth: String(schedule.sale_month),
+            saleDay: String(schedule.sale_day)
+          }))
+      : [],
     notes: product?.notes || ""
   };
 }

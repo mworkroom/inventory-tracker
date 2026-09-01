@@ -52,6 +52,159 @@
   }
 }
 
+.sale-schedule-editor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sale-schedule-editor-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.4fr) 68px 68px auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.sale-schedule-editor-row label {
+  min-width: 0;
+}
+
+.sale-schedule-remove {
+  min-height: 44px;
+  padding: 0 11px;
+}
+
+.sale-safety-field {
+  max-width: 290px;
+}
+
+.sale-recommendation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.sale-recommendation > small {
+  grid-column: 1 / -1;
+  color: var(--danger);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.monthly-actual-section .forecast-section-heading {
+  background: #f5f8f6;
+}
+
+.baseline-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.learning-status-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.baseline-actions {
+  grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.preserved-baselines {
+  display: grid;
+  gap: 5px;
+  margin-top: 20px;
+}
+
+.preserved-baselines h3,
+.preserved-baselines p {
+  margin: 0;
+}
+
+.preserved-baselines h3 {
+  font-size: var(--font-size-base);
+}
+
+.preserved-baselines > p {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.preserved-baselines ul {
+  margin: 4px 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  list-style: none;
+}
+
+.preserved-baselines li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.preserved-baselines button {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 0;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.preserved-baselines button:hover {
+  background: #f8f9fb;
+}
+
+.preserved-baselines strong {
+  font-size: var(--font-size-sm);
+}
+
+.preserved-baselines span {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+@media (max-width: 720px) {
+  .sale-schedule-editor-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sale-schedule-name-field {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .sale-schedule-remove {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 430px) {
+  .learning-status-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .baseline-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .preserved-baselines button {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
 .form-grid.three-columns {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

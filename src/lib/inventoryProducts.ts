@@ -1,4 +1,5 @@
 import type {
+  InventoryConsumptionBaseline,
   InventoryEvent,
   InventoryProduct,
   InventoryPurchase,
@@ -9,7 +10,8 @@ export function canDeleteUnusedProduct(
   product: InventoryProduct,
   events: InventoryEvent[],
   cycles: UsageCycle[],
-  purchases: InventoryPurchase[]
+  purchases: InventoryPurchase[],
+  baselines: InventoryConsumptionBaseline[] = []
 ): boolean {
   if (product.active_opened_on) return false;
 
@@ -28,6 +30,7 @@ export function canDeleteUnusedProduct(
   return (
     hasNoRealInventoryHistory &&
     !cycles.some((cycle) => cycle.product_id === product.id) &&
-    !purchases.some((purchase) => purchase.product_id === product.id)
+    !purchases.some((purchase) => purchase.product_id === product.id) &&
+    !baselines.some((baseline) => baseline.product_id === product.id)
   );
 }

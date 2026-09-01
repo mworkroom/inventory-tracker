@@ -11,8 +11,10 @@ import { readableError } from "../../lib/errors";
 import { attachProductStoreIds } from "../../lib/inventoryStores";
 import { supabase } from "../../lib/supabase";
 import type {
+  InventoryConsumptionBaseline,
   InventoryEvent,
   InventoryProduct,
+  InventoryProductSaleSchedule,
   InventoryProductStore,
   InventoryPurchase,
   InventoryStore,
@@ -27,6 +29,12 @@ export function useInventoryData(
   const [cycles, setCycles] = useState<UsageCycle[]>([]);
   const [stores, setStores] = useState<InventoryStore[]>([]);
   const [purchases, setPurchases] = useState<InventoryPurchase[]>([]);
+  const [consumptionBaselines, setConsumptionBaselines] = useState<
+    InventoryConsumptionBaseline[]
+  >([]);
+  const [saleSchedules, setSaleSchedules] = useState<
+    InventoryProductSaleSchedule[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
@@ -46,7 +54,9 @@ export function useInventoryData(
             cyclesResult,
             storesResult,
             productStoresResult,
-            purchasesResult
+            purchasesResult,
+            consumptionBaselinesResult,
+            saleSchedulesResult
           ] = await Promise.all([
             supabase
               .from("inventory_products")
@@ -85,7 +95,18 @@ export function useInventoryData(
               .eq("workspace_id", WORKSPACE_ID)
               .order("purchased_on", { ascending: false })
               .order("created_at", { ascending: false })
-              .limit(5000)
+              .limit(5000),
+            supabase
+              .from("inventory_consumption_baselines")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .order("updated_at", { ascending: false }),
+            supabase
+              .from("inventory_product_sale_schedules")
+              .select("*")
+              .eq("workspace_id", WORKSPACE_ID)
+              .order("sale_month", { ascending: true })
+              .order("sale_day", { ascending: true })
           ]);
 
           const firstError =
@@ -94,7 +115,9 @@ export function useInventoryData(
             cyclesResult.error ||
             storesResult.error ||
             productStoresResult.error ||
-            purchasesResult.error;
+            purchasesResult.error ||
+            consumptionBaselinesResult.error ||
+            saleSchedulesResult.error;
           if (firstError) {
             setError(readableError(firstError));
             return;
@@ -113,6 +136,12 @@ export function useInventoryData(
           setCycles((cyclesResult.data || []) as UsageCycle[]);
           setStores(stores);
           setPurchases((purchasesResult.data || []) as InventoryPurchase[]);
+          setConsumptionBaselines(
+            (consumptionBaselinesResult.data || []) as InventoryConsumptionBaseline[]
+          );
+          setSaleSchedules(
+            (saleSchedulesResult.data || []) as InventoryProductSaleSchedule[]
+          );
         } catch (caught) {
           setError(readableError(caught));
         } finally {
@@ -154,6 +183,8 @@ export function useInventoryData(
     cycles,
     stores,
     purchases,
+    consumptionBaselines,
+    saleSchedules,
     loading,
     refresh
   };

@@ -4,6 +4,7 @@ import { actionPastTense } from "../lib/inventory";
 import { canDeleteUnusedProduct } from "../lib/inventoryProducts";
 import type {
   ActiveUsageDraft,
+  ConsumptionBaselineDraft,
   InventoryAction,
   InventoryActionDraft,
   InventoryEvent,
@@ -69,7 +70,8 @@ export function useInventoryWorkspaceController(userId: string) {
         editorProduct,
         inventory.events,
         inventory.cycles,
-        inventory.purchases
+        inventory.purchases,
+        inventory.consumptionBaselines
       )
     : false;
 
@@ -87,6 +89,19 @@ export function useInventoryWorkspaceController(userId: string) {
     setEditorProduct(undefined);
     setExpandedId(saved.id);
     showToast(`${saved.name}을 저장했습니다.`);
+  }
+
+  async function saveConsumptionBaseline(
+    product: InventoryProduct,
+    draft: ConsumptionBaselineDraft
+  ) {
+    await inventory.upsertConsumptionBaseline(product, draft);
+    showToast(`${product.name} 회상 소비 기준을 저장했습니다.`);
+  }
+
+  async function deleteConsumptionBaseline(product: InventoryProduct) {
+    await inventory.deleteConsumptionBaseline(product);
+    showToast(`${product.name} 회상 소비 기준을 삭제했습니다.`);
   }
 
   async function saveAction(draft: InventoryActionDraft) {
@@ -276,6 +291,8 @@ export function useInventoryWorkspaceController(userId: string) {
     backup,
     openArchived,
     saveProduct,
+    saveConsumptionBaseline,
+    deleteConsumptionBaseline,
     saveAction,
     savePurchaseEdit,
     savePurchaseHistory,

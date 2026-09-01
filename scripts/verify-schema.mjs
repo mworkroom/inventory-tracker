@@ -22,7 +22,10 @@ assert.deepEqual(
     "20260726021227_add_product_store_foreign_key_indexes.sql",
     "20260815042204_add_purchase_planning.sql",
     "20260815144215_replay_inventory_event_corrections.sql",
-    "20260815163118_add_product_active_months.sql"
+    "20260815163118_add_product_active_months.sql",
+    "20260831130100_add_consumption_and_recurring_sale_foundations.sql",
+    "20260831130212_switch_to_observation_model.sql",
+    "20260831130834_add_observation_model_foreign_key_indexes.sql"
   ],
   "적용된 migration 이력과 v2 migration 목록이 다릅니다."
 );
@@ -77,6 +80,27 @@ const activeMonthsSql = await readFile(
   join(
     migrationsDirectory,
     "20260815163118_add_product_active_months.sql"
+  ),
+  "utf8"
+);
+const consumptionFoundationsSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260831130100_add_consumption_and_recurring_sale_foundations.sql"
+  ),
+  "utf8"
+);
+const observationModelSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260831130212_switch_to_observation_model.sql"
+  ),
+  "utf8"
+);
+const observationModelIndexesSql = await readFile(
+  join(
+    migrationsDirectory,
+    "20260831130834_add_observation_model_foreign_key_indexes.sql"
   ),
   "utf8"
 );
@@ -238,6 +262,184 @@ assert.match(
   activeMonthsSql,
   /create function public\.update_inventory_product_with_stores\([\s\S]*?p_active_months integer\[\][\s\S]*?set active_months = v_active_months/,
   "제품 수정 RPC가 사용 시기를 저장하지 않습니다."
+);
+assert.match(
+  consumptionFoundationsSql,
+  /add column usage_tracking text,[\s\S]*?set usage_tracking = case tracking_mode[\s\S]*?when 'cycle' then 'cycle'[\s\S]*?else 'decrement'[\s\S]*?alter column usage_tracking set not null/,
+  "기존 기록 방식을 새 기본 사용 기록 방식으로 안전하게 이관하지 않습니다."
+);
+
+assert.doesNotMatch(
+  observationModelSql,
+  /drop column\s+(?:if exists\s+)?(?:active_months|next_sale_on|purchase_coverage_months|tracking_mode)/i,
+  "2단계 전환 migration은 롤백용 기존 열을 아직 제거하면 안 됩니다."
+);
+assert.match(
+  observationModelSql,
+  /drop constraint inventory_products_cycle_package_required,[\s\S]*?drop constraint inventory_products_count_package_empty/,
+  "재고 단위와 사용 기록 방식을 분리하도록 기존 용량 제약을 해제하지 않습니다."
+);
+assert.match(
+  observationModelSql,
+  /create function private\.replace_inventory_product_sale_schedules\([\s\S]*?delete from public\.inventory_product_sale_schedules[\s\S]*?jsonb_to_recordset[\s\S]*?insert into public\.inventory_product_sale_schedules/,
+  "정기 세일 일정 전체를 제품 저장 트랜잭션 안에서 교체하지 않습니다."
+);
+assert.match(
+  observationModelSql,
+  /product_store\.store_id = v_schedule\.store_id[\s\S]*?store\.is_active = true/,
+  "정기 세일 일정의 쇼핑몰이 제품에 연결된 활성 구매처인지 검증하지 않습니다."
+);
+
+for (const functionName of [
+  "create_inventory_product_with_schedules",
+  "update_inventory_product_with_schedules",
+  "upsert_inventory_consumption_baseline",
+  "delete_inventory_consumption_baseline"
+]) {
+  const start = observationModelSql.indexOf(`create function public.${functionName}(`);
+  assert.notEqual(start, -1, `${functionName} 함수가 없습니다.`);
+  const bodyEnd = observationModelSql.indexOf("\n$$;", start);
+  assert.notEqual(bodyEnd, -1, `${functionName} 함수 본문 끝을 찾지 못했습니다.`);
+  const definition = observationModelSql.slice(start, bodyEnd);
+  assert.match(definition, /security definer/, `${functionName}이 보호된 테이블에 원자적으로 쓰지 않습니다.`);
+  assert.match(definition, /set search_path = ''/, `${functionName}의 search_path 경계가 안전하지 않습니다.`);
+  assert.match(definition, /private\.is_workspace_member/, `${functionName}에 workspace 구성원 검사가 없습니다.`);
+}
+
+assert.match(
+  observationModelSql,
+  /p_usage_tracking is distinct from v_product\.usage_tracking[\s\S]*?active_opened_on is not null[\s\S]*?사용 중인 제품을 다 쓴 뒤/,
+  "진행 중인 개봉 주기가 있을 때 사용 기록 방식 변경을 막지 않습니다."
+);
+assert.match(
+  observationModelSql,
+  /p_started_on > v_today or p_ended_on > v_today[\s\S]*?회상 소비 기준에는 오늘 또는 과거 날짜만/,
+  "회상 소비 기준에 미래 날짜가 들어가는 것을 막지 않습니다."
+);
+assert.match(
+  observationModelSql,
+  /active_months,[\s\S]*?next_sale_on,[\s\S]*?purchase_coverage_months,[\s\S]*?null,[\s\S]*?null,[\s\S]*?null,/,
+  "새 제품 생성 RPC가 수동 활성 월이나 단일 세일 계획을 다시 저장합니다."
+);
+assert.doesNotMatch(
+  observationModelSql,
+  /grant [^;]*\b(?:insert|update|delete)\b[^;]* on table public\.inventory_(?:consumption_baselines|product_sale_schedules)/i,
+  "2단계도 새 테이블 직접 쓰기를 열지 않고 검증 RPC만 사용해야 합니다."
+);
+
+for (const functionName of [
+  "create_inventory_product_with_schedules",
+  "update_inventory_product_with_schedules",
+  "upsert_inventory_consumption_baseline",
+  "delete_inventory_consumption_baseline"
+]) {
+  assert.match(
+    observationModelSql,
+    new RegExp(`revoke all on function public\\.${functionName}\\([\\s\\S]*?from public, anon, authenticated;[\\s\\S]*?grant execute on function public\\.${functionName}\\([\\s\\S]*?to authenticated;`),
+    `${functionName} 실행 권한이 authenticated 전용으로 제한되지 않았습니다.`
+  );
+}
+assert.match(
+  consumptionFoundationsSql,
+  /create trigger inventory_products_sync_usage_tracking_from_legacy[\s\S]*?before insert or update of tracking_mode[\s\S]*?sync_inventory_product_usage_tracking_from_legacy/,
+  "호환 기간에 기존 tracking_mode 쓰기를 usage_tracking으로 동기화하지 않습니다."
+);
+assert.doesNotMatch(
+  consumptionFoundationsSql,
+  /drop column\s+(?:if exists\s+)?(?:active_months|next_sale_on|purchase_coverage_months|tracking_mode)/i,
+  "1단계 migration이 아직 사용 중인 기존 열을 제거합니다."
+);
+
+for (const tableName of [
+  "inventory_consumption_baselines",
+  "inventory_product_sale_schedules"
+]) {
+  assert.match(
+    consumptionFoundationsSql,
+    new RegExp(`create table public\\.${tableName}`),
+    `${tableName} 테이블이 없습니다.`
+  );
+  assert.match(
+    consumptionFoundationsSql,
+    new RegExp(`alter table public\\.${tableName} enable row level security`),
+    `${tableName} 테이블에 RLS가 활성화되지 않았습니다.`
+  );
+  assert.match(
+    consumptionFoundationsSql,
+    new RegExp(`grant select on table public\\.${tableName}\\s*to authenticated;`),
+    `${tableName} 테이블의 인증 사용자 조회 권한이 명시되지 않았습니다.`
+  );
+  assert.doesNotMatch(
+    consumptionFoundationsSql,
+    new RegExp(
+      `grant [^;]*\\b(?:insert|update|delete)\\b[^;]* on table public\\.${tableName}`,
+      "i"
+    ),
+    `${tableName} 테이블을 1단계 UI가 직접 변경할 수 있습니다.`
+  );
+}
+
+for (const [indexName, tableName, columns] of [
+  [
+    "inventory_baselines_product_workspace_idx",
+    "inventory_consumption_baselines",
+    "product_id, workspace_id"
+  ],
+  [
+    "inventory_baselines_created_by_idx",
+    "inventory_consumption_baselines",
+    "created_by"
+  ],
+  [
+    "inventory_baselines_updated_by_idx",
+    "inventory_consumption_baselines",
+    "updated_by"
+  ],
+  [
+    "inventory_sale_schedules_product_workspace_idx",
+    "inventory_product_sale_schedules",
+    "product_id, workspace_id"
+  ],
+  [
+    "inventory_sale_schedules_created_by_idx",
+    "inventory_product_sale_schedules",
+    "created_by"
+  ],
+  [
+    "inventory_sale_schedules_updated_by_idx",
+    "inventory_product_sale_schedules",
+    "updated_by"
+  ]
+]) {
+  assert.match(
+    observationModelIndexesSql,
+    new RegExp(
+      `create index ${indexName}\\s+on public\\.${tableName} \\(${columns}\\)`
+    ),
+    `${tableName}의 ${columns} 외래 키를 보조하는 인덱스가 없습니다.`
+  );
+}
+
+assert.equal(
+  [...observationModelIndexesSql.matchAll(/create index /g)].length,
+  6,
+  "관찰 모델 FK 보조 인덱스 수가 예상과 다릅니다."
+);
+
+assert.match(
+  consumptionFoundationsSql,
+  /inventory_consumption_baselines_product_unique[\s\S]*?unique \(product_id\)[\s\S]*?inventory_consumption_baselines_dates_valid[\s\S]*?ended_on >= started_on/,
+  "제품별 회상 소비 기준 하나와 유효한 관찰 구간을 보장하지 않습니다."
+);
+assert.match(
+  consumptionFoundationsSql,
+  /inventory_product_sale_schedules_day_valid[\s\S]*?sale_month = 2 then 29[\s\S]*?sale_month in \(4, 6, 9, 11\) then 30/,
+  "정기 세일 일정의 월별 유효 날짜를 제한하지 않습니다."
+);
+assert.match(
+  consumptionFoundationsSql,
+  /insert into public\.inventory_product_sale_schedules[\s\S]*?coalesce\(product\.preferred_store_id, first_store\.store_id\)[\s\S]*?'기존 세일 일정'[\s\S]*?extract\(month from product\.next_sale_on\)[\s\S]*?where product\.next_sale_on is not null/,
+  "기존 다음 세일 날짜를 반복 일정 기반으로 복사하지 않습니다."
 );
 assert.match(
   purchasePlanningSql,

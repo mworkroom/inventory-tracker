@@ -3,8 +3,10 @@ import { WORKSPACE_ID } from "../../config";
 import { formatDateInput, todayIso } from "../../lib/inventory";
 import { supabase } from "../../lib/supabase";
 import type {
+  InventoryConsumptionBaseline,
   InventoryEvent,
   InventoryProduct,
+  InventoryProductSaleSchedule,
   InventoryProductStore,
   InventoryPurchase,
   InventoryStore,
@@ -18,14 +20,25 @@ type BackupTable =
   | "inventory_usage_cycles"
   | "inventory_stores"
   | "inventory_product_stores"
-  | "inventory_purchases";
+  | "inventory_purchases"
+  | "inventory_consumption_baselines"
+  | "inventory_product_sale_schedules";
 
 export function useInventoryBackup(runMutation: RunInventoryMutation) {
   return useCallback(
     () =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        const [products, events, cycles, stores, productStores, purchases] =
+        const [
+          products,
+          events,
+          cycles,
+          stores,
+          productStores,
+          purchases,
+          consumptionBaselines,
+          saleSchedules
+        ] =
           await Promise.all([
           fetchAllRows<InventoryProduct>("inventory_products", "name", true),
           fetchAllRows<InventoryEvent>("inventory_events", "occurred_on", false),
@@ -44,11 +57,21 @@ export function useInventoryBackup(runMutation: RunInventoryMutation) {
             "inventory_purchases",
             "purchased_on",
             false
+          ),
+          fetchAllRows<InventoryConsumptionBaseline>(
+            "inventory_consumption_baselines",
+            "updated_at",
+            false
+          ),
+          fetchAllRows<InventoryProductSaleSchedule>(
+            "inventory_product_sale_schedules",
+            "sale_month",
+            true
           )
           ]);
 
         const payload = {
-          version: 3,
+          version: 4,
           exportedAt: new Date().toISOString(),
           workspaceId: WORKSPACE_ID,
           products,
@@ -56,7 +79,9 @@ export function useInventoryBackup(runMutation: RunInventoryMutation) {
           usageCycles: cycles,
           stores,
           productStores,
-          purchases
+          purchases,
+          consumptionBaselines,
+          saleSchedules
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], {
           type: "application/json"

@@ -12,6 +12,16 @@ Later migrations extend that baseline without rewriting it. In particular,
 multiple shopping malls. Its follow-up migration adds the covering indexes
 required by the relation's workspace and audit foreign keys.
 
+The observation-first consumption rollout is recorded in three production
+migrations. `20260831130100_add_consumption_and_recurring_sale_foundations.sql`
+adds the independent usage-tracking field, recalled baseline table, and
+recurring sale schedules while retaining the legacy columns. The Stage 2
+`20260831130212_switch_to_observation_model.sql` migration adds the guarded
+product, schedule, and baseline RPCs used by the new frontend. The follow-up
+`20260831130834_add_observation_model_foreign_key_indexes.sql` covers the new
+composite product and audit-user foreign keys reported by the production
+Advisor.
+
 The baseline is intentionally destructive to Inventory Tracker data. Do not
 apply it to production until an inventory-only backup has been captured and
 the matching frontend release is ready. It does not delete shared Auth,

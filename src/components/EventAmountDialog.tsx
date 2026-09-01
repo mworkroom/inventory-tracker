@@ -4,6 +4,7 @@ import {
   formatQuantity,
   previewInventoryEventMutation
 } from "../lib/inventory";
+import { usageTrackingOf } from "../lib/observationAnalysis";
 import type { InventoryEvent, InventoryProduct } from "../types";
 import { CloseIcon } from "./Icons";
 
@@ -161,7 +162,7 @@ export function EventAmountDialog({
               <input
                 type="number"
                 min="1"
-                step={product.tracking_mode === "cycle" ? "1" : "any"}
+                step={usageTrackingOf(product) === "cycle" ? "1" : "any"}
                 autoFocus
                 value={amount}
                 onChange={(inputEvent) => setAmount(inputEvent.target.value)}

@@ -1,9 +1,12 @@
 import type {
   ActiveUsageDraft,
+  ConsumptionBaselineDraft,
+  InventoryConsumptionBaseline,
   InventoryAction,
   InventoryActionDraft,
   InventoryEvent,
   InventoryProduct,
+  InventoryProductSaleSchedule,
   InventoryPurchase,
   InventoryStore,
   ProductDraft,
@@ -25,6 +28,8 @@ export interface InventoryState {
   cycles: UsageCycle[];
   stores: InventoryStore[];
   purchases: InventoryPurchase[];
+  consumptionBaselines: InventoryConsumptionBaseline[];
+  saleSchedules: InventoryProductSaleSchedule[];
   loading: boolean;
   busy: boolean;
   error: string | null;
@@ -34,6 +39,11 @@ export interface InventoryState {
     product: InventoryProduct,
     draft: ProductDraft
   ) => Promise<InventoryProduct>;
+  upsertConsumptionBaseline: (
+    product: InventoryProduct,
+    draft: ConsumptionBaselineDraft
+  ) => Promise<InventoryConsumptionBaseline>;
+  deleteConsumptionBaseline: (product: InventoryProduct) => Promise<void>;
   recordAction: (
     product: InventoryProduct,
     action: InventoryAction,

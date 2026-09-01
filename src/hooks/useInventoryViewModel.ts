@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import {
   calculateProductAnalysis,
-  calculatePurchaseStats,
   getInventoryAttentionKind,
   isInventoryAttentionNeeded,
   isRepurchaseDue
-} from "../lib/inventory";
+} from "../lib/observationAnalysis";
+import { calculatePurchaseStats } from "../lib/inventory";
 import { getProductStoreIds } from "../lib/inventoryStores";
 import type {
   InventoryFilter,
@@ -64,10 +64,12 @@ export function useInventoryViewModel({
     inventory.products.forEach((product) => {
       const analysis = calculateProductAnalysis(
         product,
-        inventory.purchases,
         inventory.events,
         inventory.cycles,
-        purchaseStats.get(product.id) || null
+        inventory.consumptionBaselines.find(
+          (baseline) => baseline.product_id === product.id
+        ) || null,
+        inventory.saleSchedules
       );
       estimates.set(product.id, analysis.estimate);
       consumptionStats.set(product.id, analysis.consumptionStats);
@@ -75,10 +77,10 @@ export function useInventoryViewModel({
     return { estimates, consumptionStats };
   }, [
     inventory.cycles,
+    inventory.consumptionBaselines,
     inventory.events,
     inventory.products,
-    inventory.purchases,
-    purchaseStats
+    inventory.saleSchedules
   ]);
   const { estimates, consumptionStats } = productAnalysis;
 
@@ -99,11 +101,16 @@ export function useInventoryViewModel({
         const estimate = estimates.get(product.id);
         const stats = purchaseStats.get(product.id);
         return estimate && stats
-          ? isInventoryAttentionNeeded(product, estimate, stats)
+          ? isInventoryAttentionNeeded(
+              product,
+              estimate,
+              stats,
+              consumptionStats.get(product.id) || null
+            )
           : false;
       }).length
     }),
-    [estimates, inventory.products, purchaseStats]
+    [consumptionStats, estimates, inventory.products, purchaseStats]
   );
 
   const visibleProducts = useMemo(() => {
@@ -116,7 +123,12 @@ export function useInventoryViewModel({
           filter === "attention" &&
           (!estimate ||
             !stats ||
-            !isInventoryAttentionNeeded(product, estimate, stats))
+            !isInventoryAttentionNeeded(
+              product,
+              estimate,
+              stats,
+              consumptionStats.get(product.id) || null
+            ))
         ) {
           return false;
         }
@@ -131,10 +143,18 @@ export function useInventoryViewModel({
       })
       .sort((a, b) =>
         filter === "attention"
-          ? compareProducts(a, b, estimates, purchaseStats)
+          ? compareProducts(a, b, estimates, purchaseStats, consumptionStats)
           : a.name.localeCompare(b.name, "ko-KR")
       );
-  }, [estimates, filter, inventory.products, purchaseStats, query, storeById]);
+  }, [
+    consumptionStats,
+    estimates,
+    filter,
+    inventory.products,
+    purchaseStats,
+    query,
+    storeById
+  ]);
 
   const storeGroups = useMemo(
     () => groupByStore(visibleProducts, storeById),
@@ -164,7 +184,8 @@ function compareProducts(
   a: InventoryProduct,
   b: InventoryProduct,
   estimates: Map<string, ProductEstimate>,
-  purchaseStats: Map<string, PurchaseStats>
+  purchaseStats: Map<string, PurchaseStats>,
+  consumptionStats: Map<string, ConsumptionStats>
 ): number {
   const aEstimate = estimates.get(a.id);
   const bEstimate = estimates.get(b.id);
@@ -179,9 +200,19 @@ function compareProducts(
   const aStats = purchaseStats.get(a.id);
   const bStats = purchaseStats.get(b.id);
   const aRepurchaseDue =
-    aStats && isRepurchaseDue(a, aStats, aEstimate || null) ? 1 : 0;
+    aStats && isRepurchaseDue(
+      a,
+      aStats,
+      aEstimate || null,
+      consumptionStats.get(a.id) || null
+    ) ? 1 : 0;
   const bRepurchaseDue =
-    bStats && isRepurchaseDue(b, bStats, bEstimate || null) ? 1 : 0;
+    bStats && isRepurchaseDue(
+      b,
+      bStats,
+      bEstimate || null,
+      consumptionStats.get(b.id) || null
+    ) ? 1 : 0;
   if (aRepurchaseDue !== bRepurchaseDue) {
     return bRepurchaseDue - aRepurchaseDue;
   }

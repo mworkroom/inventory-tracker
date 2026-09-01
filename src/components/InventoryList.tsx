@@ -3,10 +3,10 @@ import type { InventoryWorkspaceController } from "../hooks/useInventoryWorkspac
 import type { InventoryViewModel } from "../hooks/useInventoryViewModel";
 import {
   calculateConsumptionStats,
-  calculatePurchaseStats,
   estimateProduct,
   isInventoryAttentionNeeded
-} from "../lib/inventory";
+} from "../lib/observationAnalysis";
+import { calculatePurchaseStats } from "../lib/inventory";
 import type { InventoryProduct } from "../types";
 import { GroupByMenu } from "./GroupByMenu";
 import { CategoryIcon, ChevronIcon, StoreIcon } from "./Icons";
@@ -37,8 +37,7 @@ export function InventoryList({
             product,
             [],
             [],
-            undefined,
-            view.purchaseStats.get(product.id) || null
+            null
           )
         }
         purchaseStats={
@@ -51,7 +50,8 @@ export function InventoryList({
             product,
             [],
             [],
-            estimateProduct(product, [], [])
+            null,
+            []
           )
         }
         events={inventory.events}
@@ -142,7 +142,12 @@ export function InventoryList({
               const estimate = view.estimates.get(product.id);
               const stats = view.purchaseStats.get(product.id);
               return estimate && stats
-                ? isInventoryAttentionNeeded(product, estimate, stats)
+                ? isInventoryAttentionNeeded(
+                    product,
+                    estimate,
+                    stats,
+                    view.consumptionStats.get(product.id) || null
+                  )
                 : false;
             }).length;
             const groupStateKey = `${viewMode}:${group.key}`;

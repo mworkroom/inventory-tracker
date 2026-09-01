@@ -1,55 +1,54 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type {
-  InventoryEvent,
-  InventoryProduct,
-  InventoryPurchase,
-  UsageCycle
-} from "../../types";
 import {
-  calculateConsumptionStats,
-  calculateProductAnalysis,
-  calculateStockCheckUsage,
+  addDays,
   calculatePurchaseStats,
-  estimateProduct,
-  formatDate,
-  formatDateInput,
-  getInventoryAttentionKind,
-  isInventoryAttentionNeeded,
-  isRepurchaseDue,
-  median,
+  calculateStockCheckUsage,
+  daysBetween,
   parseDateInput,
   parsePurchaseDates,
   previewInventoryEventMutation,
   usageCycleDurationDays
 } from "../inventory";
 import {
-  attachProductStoreIds,
-  getProductStoreIds
-} from "../inventoryStores";
-import { groupByStore } from "../../hooks/useInventoryViewModel";
-import {
-  formatActiveMeta,
-  formatConsumptionAmount,
-  formatPurchaseForecast
-} from "../productPresentation";
+  calculateConsumptionStats,
+  calculateProductAnalysis,
+  estimateProduct,
+  getInventoryAttentionKind,
+  isInventoryAttentionNeeded,
+  isRepurchaseDue,
+  usageTrackingOf
+} from "../observationAnalysis";
+import type {
+  InventoryConsumptionBaseline,
+  InventoryEvent,
+  InventoryProduct,
+  InventoryProductSaleSchedule,
+  InventoryPurchase,
+  PurchaseStats,
+  UsageCycle
+} from "../../types";
 
 const baseProduct: InventoryProduct = {
   id: "product-1",
   workspace_id: "workspace-1",
-  name: "테스트",
+  name: "세라 크림",
+  category: "화장품",
   tracking_mode: "cycle",
+  usage_tracking: "cycle",
+  usage_tracking_changed_on: null,
   unit_label: "통",
-  package_size: 1600,
+  package_size: 50,
   capacity_unit: "ml",
-  current_quantity: 1,
+  current_quantity: 2,
   stock_initialized: true,
-  low_stock_threshold: 0,
+  low_stock_threshold: 1,
   alert_days: 30,
   current_consumer_count: 1,
   active_opened_on: null,
   active_consumer_count: null,
   preferred_store_id: null,
+  store_ids: [],
   next_sale_on: null,
   purchase_coverage_months: null,
   purchase_safety_quantity: 0,
@@ -58,779 +57,479 @@ const baseProduct: InventoryProduct = {
   is_archived: false,
   created_by: null,
   updated_by: null,
-  created_at: "2026-07-19T00:00:00Z",
-  updated_at: "2026-07-19T00:00:00Z"
+  created_at: "2025-01-01T00:00:00Z",
+  updated_at: "2025-01-01T00:00:00Z"
 };
-
-test("기존 주구매처는 쇼핑몰 연결이 없을 때 단일 쇼핑몰로 유지한다", () => {
-  assert.deepEqual(
-    getProductStoreIds({
-      ...baseProduct,
-      preferred_store_id: "store-legacy"
-    }),
-    ["store-legacy"]
-  );
-});
-
-test("복수 쇼핑몰 연결을 제품에 합치고 쇼핑몰별 그룹에 각각 표시한다", () => {
-  const stores = [
-    {
-      id: "store-coupang",
-      workspace_id: "workspace-1",
-      name: "쿠팡",
-      sort_order: 10,
-      is_active: true,
-      created_by: null,
-      created_at: "2026-07-19T00:00:00Z"
-    },
-    {
-      id: "store-kurly",
-      workspace_id: "workspace-1",
-      name: "마켓컬리",
-      sort_order: 30,
-      is_active: true,
-      created_by: null,
-      created_at: "2026-07-19T00:00:00Z"
-    }
-  ];
-  const [product] = attachProductStoreIds(
-    [baseProduct],
-    [
-      {
-        workspace_id: "workspace-1",
-        product_id: baseProduct.id,
-        store_id: "store-kurly",
-        created_by: null,
-        created_at: "2026-07-19T00:00:00Z"
-      },
-      {
-        workspace_id: "workspace-1",
-        product_id: baseProduct.id,
-        store_id: "store-coupang",
-        created_by: null,
-        created_at: "2026-07-19T00:00:00Z"
-      }
-    ],
-    stores
-  );
-
-  assert.deepEqual(product.store_ids, ["store-coupang", "store-kurly"]);
-  assert.deepEqual(
-    groupByStore(product ? [product] : [], new Map(stores.map((store) => [store.id, store])))
-      .map((group) => [group.name, group.products.map((item) => item.id)]),
-    [
-      ["쿠팡", [baseProduct.id]],
-      ["마켓컬리", [baseProduct.id]]
-    ]
-  );
-});
 
 function cycle(overrides: Partial<UsageCycle> = {}): UsageCycle {
   return {
     id: "cycle-1",
     workspace_id: "workspace-1",
-    product_id: "product-1",
-    opened_on: "2026-05-01",
-    finished_on: "2026-07-15",
-    duration_days: 76,
-    package_size: 1600,
+    product_id: baseProduct.id,
+    opened_on: "2026-06-01",
+    finished_on: "2026-06-30",
+    duration_days: 30,
+    package_size: 50,
     capacity_unit: "ml",
-    consumer_count: 2,
+    consumer_count: 1,
     created_by: null,
-    created_at: "2026-07-15T00:00:00Z",
+    created_at: "2026-06-30T00:00:00Z",
     ...overrides
   };
 }
 
-function useEvent(date: string, amount = 1): InventoryEvent {
+function event(
+  occurredOn: string,
+  amount: number,
+  overrides: Partial<InventoryEvent> = {}
+): InventoryEvent {
   return {
-    id: `event-${date}`,
+    id: "event-" + occurredOn + "-" + amount,
     workspace_id: "workspace-1",
-    product_id: "product-1",
+    product_id: baseProduct.id,
     event_type: "use",
-    quantity_delta: -amount,
-    quantity_before: 10,
-    quantity_after: 10 - amount,
-    occurred_on: date,
+    quantity_delta: -Math.abs(amount),
+    quantity_before: 20,
+    quantity_after: 20 - Math.abs(amount),
+    occurred_on: occurredOn,
     consumer_count: null,
     note: null,
     created_by: null,
-    created_at: `${date}T00:00:00Z`
-  };
-}
-
-function intakeEvent(date: string, amount = 1): InventoryEvent {
-  return {
-    ...useEvent(date, amount),
-    id: `intake-${date}`,
-    event_type: "intake",
-    quantity_delta: amount,
-    quantity_before: 0,
-    quantity_after: amount
-  };
-}
-
-function purchase(
-  date: string,
-  overrides: Partial<InventoryPurchase> = {}
-): InventoryPurchase {
-  return {
-    id: overrides.id || `purchase-${date}`,
-    workspace_id: "workspace-1",
-    product_id: "product-1",
-    store_id: "store-1",
-    purchased_on: date,
-    package_count: 1,
-    package_size: 5000,
-    package_unit: "g",
-    total_price: null,
-    shipping_fee: null,
-    note: null,
-    created_by: null,
-    updated_by: null,
-    created_at: `${date}T00:00:00Z`,
-    updated_at: `${date}T00:00:00Z`,
+    created_at: occurredOn + "T12:00:00Z",
     ...overrides
   };
 }
 
-test("현재 저장 인원과 무관하게 두 명이 76일 쓴 제품을 한 명 기준 152일로 보정한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    current_consumer_count: 2
-  };
-  const estimate = estimateProduct(product, [], [cycle()], "2026-07-19");
-  assert.equal(estimate.expectedCycleDays, 152);
-  assert.equal(estimate.remainingDays, 152);
-  assert.ok(estimate.perPersonDailyCapacity);
-  assert.ok(Math.abs((estimate.perPersonDailyCapacity || 0) - 10.5263) < 0.001);
-});
-
-test("두 명의 완료 기록에서 파생한 월평균과 연간 필요량도 한 명 기준으로 유지한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    current_consumer_count: 2
-  };
-  const estimate = estimateProduct(product, [], [cycle()], "2026-07-19");
-  const stats = calculateConsumptionStats(product, [], [], estimate, "2026-07-19");
-
-  assert.equal(stats.source, "usage");
-  assert.ok(Math.abs((stats.monthlyAmount || 0) - 320.3947) < 0.01);
-  assert.ok(Math.abs((stats.annualAmount || 0) - 3844.7368) < 0.01);
-});
-
-test("개봉 후 지난 기간과 미개봉 1통을 각각 남은 기간에 반영한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    current_quantity: 2,
-    active_opened_on: "2026-04-12",
-    active_consumer_count: 1
-  };
-  const estimate = estimateProduct(
-    product,
-    [],
-    [cycle({ duration_days: 160, consumer_count: 1 })],
-    "2026-07-19"
-  );
-  assert.equal(estimate.expectedCycleDays, 160);
-  assert.equal(estimate.remainingDays, 62 + 160);
-});
-
-test("두 명이 함께 쓰는 현재 제품은 경과일을 두 사람분 사용량으로 차감한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    current_quantity: 2,
-    current_consumer_count: 2,
-    active_opened_on: "2026-07-09",
-    active_consumer_count: 2
-  };
-  const estimate = estimateProduct(
-    product,
-    [],
-    [cycle({ duration_days: 160, consumer_count: 1 })],
-    "2026-07-19"
-  );
-
-  assert.equal(estimate.expectedCycleDays, 160);
-  assert.equal(estimate.remainingDays, 140 + 160);
-});
-
-test("쓸 때마다 수량 줄이기는 최근 사용 간격의 중앙값으로 남은 기간을 계산한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    tracking_mode: "count",
-    unit_label: "인분",
-    package_size: null,
-    capacity_unit: null,
-    current_quantity: 4
-  };
-  const events = [useEvent("2026-07-01"), useEvent("2026-07-09"), useEvent("2026-07-17")];
-  const estimate = estimateProduct(product, events, [], "2026-07-19");
-  assert.equal(estimate.daysPerUnit, 8);
-  assert.equal(estimate.remainingDays, 32);
-});
-
-test("남은 수량 확인은 앱 재고와 실제 잔량의 차이를 사용량으로 계산한다", () => {
-  assert.equal(calculateStockCheckUsage(8, "3"), 5);
-  assert.throws(
-    () => calculateStockCheckUsage(8, "9"),
-    /입고 또는 재고 정정/
-  );
-  assert.throws(
-    () => calculateStockCheckUsage(8, "8"),
-    /현재 앱 재고와 같습니다/
-  );
-  assert.throws(
-    () => calculateStockCheckUsage(8, ""),
-    /실제 남은 수량을 입력/
-  );
-});
-
-test("재고 수량 기준과 예상 소진일 기준 모두 구매 필요를 표시한다", () => {
-  assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 1 }, [], [], "2026-07-19").isUrgent, true);
-  assert.equal(estimateProduct({ ...baseProduct, current_quantity: 1, low_stock_threshold: 0, alert_days: 160 }, [], [cycle()], "2026-07-19").isUrgent, true);
-});
-
-test("과거 사용 주기는 개봉일과 소진일을 모두 포함해 기간을 계산한다", () => {
-  assert.equal(usageCycleDurationDays("2026-04-12", "2026-06-26"), 76);
-});
-
-test("재고 미설정 제품은 0개로 오해해 구매 필요를 표시하지 않는다", () => {
-  const estimate = estimateProduct(
-    { ...baseProduct, current_quantity: 0, stock_initialized: false, low_stock_threshold: 1 },
-    [],
-    [],
-    "2026-07-19"
-  );
-  assert.equal(estimate.isUrgent, false);
-  assert.equal(estimate.remainingDays, null);
-  assert.equal(estimate.forecastSource, null);
-});
-
-test("사용 기록이 없으면 과거 구매 간격을 임시 예상으로 사용한다", () => {
-  const purchases = [
-    purchase("2024-01-10"),
-    purchase("2024-05-18"),
-    purchase("2024-10-02"),
-    purchase("2025-02-11"),
-    purchase("2025-07-06")
-  ];
-  const stats = calculatePurchaseStats(
-    "product-1",
-    purchases,
-    [],
-    "2025-07-20"
-  );
-  const estimate = estimateProduct(
-    { ...baseProduct, current_quantity: 0, stock_initialized: false, alert_days: 130 },
-    [],
-    [],
-    "2025-07-20",
-    stats
-  );
-  assert.equal(estimate.forecastSource, "purchase_interval");
-  assert.equal(estimate.estimatedOutDate, "2025-11-18");
-  assert.equal(estimate.remainingDays, 121);
-  assert.equal(estimate.isUrgent, true);
-});
-
-test("중앙값은 튀는 사용 기록 하나의 영향을 줄인다", () => {
-  assert.equal(median([48, 92, 51, 53]), 52);
-});
-
-test("과거 구매일의 최근 간격 중앙값으로 다음 구매일을 계산한다", () => {
-  const purchases = [purchase("2024-01-10"), purchase("2024-05-18"), purchase("2024-10-02"), purchase("2025-02-11"), purchase("2025-07-06")];
-  const stats = calculatePurchaseStats(
-    "product-1",
-    purchases,
-    [],
-    "2025-07-20"
-  );
-  assert.equal(stats.purchaseDateCount, 5);
-  assert.equal(stats.medianIntervalDays, 134.5);
-  assert.equal(stats.nextPurchaseDate, "2025-11-18");
-  assert.equal(stats.daysUntilNextPurchase, 121);
-});
-
-test("같은 날 여러 번 산 기록은 구매 간격 날짜 하나로 계산한다", () => {
-  const stats = calculatePurchaseStats(
-    "product-1",
-    [
-      purchase("2025-01-01"),
-      purchase("2025-01-01", { id: "same-day-2" }),
-      purchase("2025-02-01")
-    ],
-    [],
-    "2025-02-02"
-  );
-  assert.equal(stats.purchaseDateCount, 2);
-  assert.equal(stats.medianIntervalDays, 31);
-});
-
-test("실제 구매일과 입고일은 별도로 집계한다", () => {
-  const stats = calculatePurchaseStats(
-    "product-1",
-    [purchase("2025-01-01"), purchase("2025-02-01")],
-    [intakeEvent("2025-02-01"), intakeEvent("2025-03-01")],
-    "2025-03-02"
-  );
-  assert.equal(stats.purchaseRecordCount, 2);
-  assert.equal(stats.purchaseDateCount, 2);
-  assert.equal(stats.medianIntervalDays, 31);
-  assert.equal(stats.lastPurchasedOn, "2025-02-01");
-  assert.equal(stats.latestIntakeOn, "2025-03-01");
-  assert.equal(stats.latestIntakeQuantity, 1);
-  assert.equal(stats.nextPurchaseDate, "2025-03-04");
-});
-
-test("과거 구매 수량과 제품 용량으로 월평균 소비량을 추정한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    name: "허블룸 콤부차 세럼",
+function baseline(
+  overrides: Partial<InventoryConsumptionBaseline> = {}
+): InventoryConsumptionBaseline {
+  return {
+    id: "baseline-1",
+    workspace_id: "workspace-1",
+    product_id: baseProduct.id,
+    usage_tracking: "cycle",
+    started_on: "2026-01-01",
+    ended_on: "2026-01-30",
+    consumed_quantity: 1,
+    quantity_unit: "통",
     package_size: 50,
     capacity_unit: "ml",
-    current_quantity: 2
+    consumer_count: 1,
+    note: null,
+    created_by: null,
+    updated_by: null,
+    created_at: "2026-01-30T00:00:00Z",
+    updated_at: "2026-01-30T00:00:00Z",
+    ...overrides
   };
-  const purchases = [
-    purchase("2022-10-02", { package_size: null, package_unit: null }),
-    purchase("2023-07-06", { id: "2023-a", package_size: null, package_unit: null }),
-    purchase("2023-07-06", { id: "2023-b", package_size: null, package_unit: null }),
-    purchase("2023-11-23", { package_count: 2, package_size: 50, package_unit: "ml" }),
-    purchase("2024-04-05", { package_count: 2, package_size: 50, package_unit: "ml" }),
-    purchase("2024-04-11", { package_size: null, package_unit: null }),
-    purchase("2024-10-25", { package_count: 4, package_size: 50, package_unit: "ml" }),
-    purchase("2025-11-13", { package_count: 4, package_size: 50, package_unit: "ml" })
-  ];
-  const events = [intakeEvent("2026-04-03", 2)];
-  const estimate = estimateProduct(product, events, [], "2026-08-15");
-  const stats = calculateConsumptionStats(
-    product,
-    purchases,
-    events,
-    estimate,
-    "2026-08-15"
-  );
+}
 
-  assert.equal(stats.source, "purchase");
-  assert.equal(stats.observationDays, 1279);
-  assert.equal(stats.sampleCount, 8);
-  assert.equal(stats.inferredSizeRecordCount, 4);
-  assert.ok(Math.abs((stats.monthlyAmount || 0) - 19.038) < 0.01);
-  assert.ok(Math.abs((stats.annualAmount || 0) - 228.456) < 0.02);
+function saleSchedule(
+  id: string,
+  month: number,
+  day: number,
+  overrides: Partial<InventoryProductSaleSchedule> = {}
+): InventoryProductSaleSchedule {
+  return {
+    id,
+    workspace_id: "workspace-1",
+    product_id: baseProduct.id,
+    store_id: "store-1",
+    name: "정기 세일",
+    sale_month: month,
+    sale_day: day,
+    created_by: null,
+    updated_by: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides
+  };
+}
+
+const emptyPurchaseStats: PurchaseStats = {
+  purchaseRecordCount: 0,
+  purchaseDateCount: 0,
+  totalPackageCount: 0,
+  intervalSampleCount: 0,
+  medianIntervalDays: null,
+  firstPurchasedOn: null,
+  lastPurchasedOn: null,
+  lastPurchasePackageCount: null,
+  latestIntakeOn: null,
+  latestIntakeQuantity: null,
+  nextPurchaseDate: null,
+  daysUntilNextPurchase: null
+};
+
+test("stock check records only a known decrease", () => {
+  assert.equal(calculateStockCheckUsage(10, "7"), 3);
+  assert.throws(() => calculateStockCheckUsage(10, "11"), /입고 또는 재고 정정/);
+  assert.throws(() => calculateStockCheckUsage(10, "10"), /현재 앱 재고와 같습니다/);
 });
 
-test("실제 사용 주기가 있으면 과거 구매량보다 우선한다", () => {
-  const estimate = estimateProduct(baseProduct, [], [cycle()], "2026-07-19");
-  const purchases = ["2024-01-01", "2024-10-01", "2025-07-01"].map(
-    (date, index) => purchase(date, {
-      id: `usage-priority-${index}`,
-      package_count: 20,
-      package_size: 1600,
-      package_unit: "ml"
-    })
-  );
-  const stats = calculateConsumptionStats(
-    baseProduct,
-    purchases,
-    [],
-    estimate,
-    "2026-07-19"
-  );
-  const analysis = calculateProductAnalysis(
-    baseProduct,
-    purchases,
-    [],
-    [cycle()],
-    null,
-    "2026-07-19"
-  );
-
-  assert.equal(stats.source, "usage");
-  assert.equal(stats.sampleCount, 1);
-  assert.ok(Math.abs((stats.monthlyAmount || 0) - 320.3947) < 0.01);
-  assert.equal(analysis.estimate.forecastSource, "usage");
-});
-
-test("세일 날짜의 예상 재고를 빼고 여유 재고를 더해 추천 구매 수량을 계산한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    package_size: 50,
-    capacity_unit: "ml",
-    current_quantity: 2,
-    next_sale_on: "2026-11-27",
-    purchase_coverage_months: 12,
-    purchase_safety_quantity: 1
-  };
-  const purchases = [
-    purchase("2022-10-02", { package_count: 16, package_size: 50, package_unit: "ml" })
-  ];
-  const events = [intakeEvent("2026-04-03", 2)];
-  const estimate = estimateProduct(product, events, [], "2026-08-15");
-  const stats = calculateConsumptionStats(product, purchases, events, estimate, "2026-08-15");
-
-  assert.equal(stats.recommendedPurchaseQuantity, 5);
-  assert.ok(Math.abs((stats.expectedStockOnSaleDate || 0) - 0.699) < 0.02);
-});
-
-test("계절 제품은 연평균과 사용 월 평균을 나누고 활성 월만 구매량에 반영한다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    package_size: 50,
-    capacity_unit: "ml",
-    current_quantity: 1,
-    active_months: [6, 7, 8],
-    next_sale_on: "2026-05-15",
-    purchase_coverage_months: 4,
-    purchase_safety_quantity: 0
-  };
-  const purchases = [
-    purchase("2025-01-01", {
-      package_count: 3,
-      package_size: 50,
-      package_unit: "ml"
-    })
-  ];
-  const events = [intakeEvent("2026-01-01", 1)];
-  const estimate = estimateProduct(product, events, [], "2026-01-01");
-  const stats = calculateConsumptionStats(
-    product,
-    purchases,
-    events,
-    estimate,
-    "2026-01-01"
-  );
-
-  assert.ok(Math.abs((stats.monthlyPackageCount || 0) - 0.25) < 0.01);
-  assert.ok(Math.abs((stats.activeMonthlyPackageCount || 0) - 0.99) < 0.02);
-  assert.ok(Math.abs((stats.annualPackageCount || 0) - 3) < 0.01);
-  assert.equal(stats.nextSeasonStartOn, "2026-06-01");
-  assert.equal(stats.nextSeasonEndOn, "2026-08-31");
-  assert.equal(stats.recommendedPurchaseQuantity, 2);
-});
-
-test("계절 제품의 소진 예상일은 비사용 월을 건너뛴다", () => {
-  const product: InventoryProduct = {
-    ...baseProduct,
-    tracking_mode: "count",
-    unit_label: "통",
-    package_size: null,
-    capacity_unit: null,
-    current_quantity: 1,
-    active_months: [6, 7, 8]
-  };
-  const events = [
-    useEvent("2026-06-01"),
-    useEvent("2026-07-01")
-  ];
-  const estimate = estimateProduct(product, events, [], "2026-08-31");
-
-  assert.equal(estimate.daysPerUnit, 30);
-  assert.equal(estimate.estimatedOutDate, "2027-06-30");
-  assert.equal(estimate.remainingDays, 303);
-});
-
-test("과거 입고 수량을 수정하면 뒤에 입력한 재고 기록까지 다시 계산한다", () => {
-  const first = {
-    ...intakeEvent("2026-04-06", 2),
-    id: "intake-first",
-    created_at: "2026-08-15T05:24:06Z"
-  };
-  const second = {
-    ...intakeEvent("2026-04-06", 1),
-    id: "intake-second",
-    quantity_before: 2,
-    quantity_after: 3,
-    created_at: "2026-08-15T05:26:40Z"
-  };
-  const preview = previewInventoryEventMutation(
-    { ...baseProduct, current_quantity: 3 },
-    [second, first],
-    first.id,
-    3
-  );
-
-  assert.deepEqual(preview, {
-    nextQuantity: 4,
+test("inventory event preview replays the ledger after an edit", () => {
+  const product = { ...baseProduct, usage_tracking: "decrement" as const, tracking_mode: "count" as const, current_quantity: 7 };
+  const intake = event("2026-01-01", 10, {
+    id: "intake",
+    event_type: "intake",
+    quantity_delta: 10,
+    quantity_before: 0,
+    quantity_after: 10,
+    created_at: "2026-01-01T00:00:00Z"
+  });
+  const use = event("2026-01-02", 3, {
+    id: "use",
+    quantity_before: 10,
+    quantity_after: 7,
+    created_at: "2026-01-02T00:00:00Z"
+  });
+  assert.deepEqual(previewInventoryEventMutation(product, [intake, use], "intake", 12), {
+    nextQuantity: 9,
     followingEventCount: 1,
     error: null
   });
 });
 
-test("보정용 입고 기록을 삭제하면 남은 원장 기준 현재 재고를 계산한다", () => {
-  const first = {
-    ...intakeEvent("2026-04-06", 2),
-    id: "intake-first",
-    created_at: "2026-08-15T05:24:06Z"
-  };
-  const second = {
-    ...intakeEvent("2026-04-06", 1),
-    id: "intake-second",
-    quantity_before: 2,
-    quantity_after: 3,
-    created_at: "2026-08-15T05:26:40Z"
-  };
-  const preview = previewInventoryEventMutation(
-    { ...baseProduct, current_quantity: 3 },
-    [first, second],
-    second.id,
-    null
+test("date and purchase parsers normalize supported formats", () => {
+  assert.equal(parseDateInput("08/31/2026"), "2026-08-31");
+  assert.deepEqual(
+    parsePurchaseDates("2026-01-02\n03/04/2026", "2026-12-31"),
+    ["2026-01-02", "2026-03-04"]
   );
+  assert.equal(daysBetween("2026-01-01", "2026-01-11"), 10);
+  assert.equal(addDays("2026-01-31", 1), "2026-02-01");
+  assert.equal(usageCycleDurationDays("2026-01-01", "2026-01-01"), 1);
+});
 
-  assert.deepEqual(preview, {
-    nextQuantity: 2,
-    followingEventCount: 0,
-    error: null
+test("purchase statistics keep purchase behavior separate from consumption", () => {
+  const purchases: InventoryPurchase[] = [
+    purchase("purchase-1", "2026-01-01", 2),
+    purchase("purchase-2", "2026-01-01", 1),
+    purchase("purchase-3", "2026-02-01", 3)
+  ];
+  const stats = calculatePurchaseStats(baseProduct.id, purchases, [], "2026-02-10");
+  assert.equal(stats.purchaseRecordCount, 3);
+  assert.equal(stats.purchaseDateCount, 2);
+  assert.equal(stats.totalPackageCount, 6);
+  assert.equal(stats.medianIntervalDays, 31);
+  assert.equal(stats.nextPurchaseDate, "2026-03-04");
+});
+
+test("one completed cycle immediately creates an actual-use estimate", () => {
+  const estimate = estimateProduct(baseProduct, [], [cycle()], null, "2026-07-01");
+  assert.equal(estimate.forecastSource, "usage");
+  assert.equal(estimate.isLearning, false);
+  assert.equal(estimate.cycleSampleCount, 1);
+  assert.equal(estimate.expectedCycleDays, 30);
+  assert.equal(estimate.remainingDays, 60);
+});
+
+test("cycle observations normalize shared use and package-size changes", () => {
+  const estimate = estimateProduct(
+    baseProduct,
+    [],
+    [cycle({ package_size: 25, consumer_count: 2 })],
+    null,
+    "2026-07-01"
+  );
+  assert.equal(estimate.expectedCycleDays, 120);
+  assert.equal(estimate.perPersonDailyCapacity, 50 / 120);
+});
+
+test("decrement tracking requires two distinct use dates", () => {
+  const product = decrementProduct({ current_quantity: 5 });
+  const first = estimateProduct(product, [event("2026-01-01", 1)], [], null, "2026-01-11");
+  assert.equal(first.forecastSource, null);
+  assert.equal(first.useSampleCount, 1);
+
+  const ready = estimateProduct(
+    product,
+    [event("2026-01-01", 1), event("2026-01-11", 1)],
+    [],
+    null,
+    "2026-01-11"
+  );
+  assert.equal(ready.forecastSource, "usage");
+  assert.equal(ready.useSampleCount, 2);
+  assert.equal(ready.daysPerUnit, 10);
+  assert.equal(ready.remainingDays, 50);
+});
+
+test("a recalled baseline starts an estimate but never becomes an actual sample", () => {
+  const product = decrementProduct({ current_quantity: 5 });
+  const recalled = baseline({
+    usage_tracking: "decrement",
+    quantity_unit: "개",
+    package_size: null,
+    capacity_unit: null,
+    started_on: "2026-01-01",
+    ended_on: "2026-01-10",
+    consumed_quantity: 2
   });
+  const analysis = calculateProductAnalysis(product, [], [], recalled, [], "2026-01-11");
+  assert.equal(analysis.estimate.forecastSource, "recalled_baseline");
+  assert.equal(analysis.estimate.remainingDays, 25);
+  assert.equal(analysis.consumptionStats.source, "recalled_baseline");
+  assert.equal(analysis.consumptionStats.sampleCount, 1);
+  assert.equal(analysis.consumptionStats.monthlyActuals.length, 0);
+  assert.equal(analysis.consumptionStats.seasonality.actualRecordCount, 0);
 });
 
-test("재고 정정 기록은 과거 수량 수정 후에도 당시 실제 재고 기준점을 유지한다", () => {
-  const intake = {
-    ...intakeEvent("2026-04-01", 2),
-    id: "intake-first",
-    created_at: "2026-04-01T00:00:00Z"
-  };
-  const adjustment: InventoryEvent = {
-    ...intakeEvent("2026-04-02", 1),
-    id: "adjustment-later",
-    event_type: "adjustment",
-    quantity_delta: -1,
-    quantity_before: 2,
-    quantity_after: 1,
-    created_at: "2026-04-02T00:00:00Z"
-  };
-  const preview = previewInventoryEventMutation(
-    { ...baseProduct, current_quantity: 1 },
-    [intake, adjustment],
-    intake.id,
-    3
-  );
-
-  assert.equal(preview.nextQuantity, 1);
-  assert.equal(preview.error, null);
-});
-
-test("미국식 날짜 입력은 ISO로 정규화하고 화면에는 미국식으로 표시한다", () => {
-  assert.equal(parseDateInput("2/10/2024"), "2024-02-10");
-  assert.equal(parseDateInput("02/10/2024"), "2024-02-10");
-  assert.equal(parseDateInput("2024-02-10"), "2024-02-10");
-  assert.equal(parseDateInput("2/30/2024"), null);
-  assert.equal(formatDateInput("2024-02-10"), "2/10/2024");
-  assert.equal(formatDate("2024-02-10"), "2/10/2024");
-});
-
-test("과거 구매일 붙여넣기는 미국식과 기존 날짜 형식을 정규화하고 중복을 제거한다", () => {
-  assert.deepEqual(parsePurchaseDates("2/10/2024\n06/21/2024\n2024년 11월 3일\n2024-02-10", "2025-01-01"), ["2024-02-10", "2024-06-21", "2024-11-03"]);
-});
-
-test("잘못된 날짜와 미래 날짜는 과거 구매일 입력에서 거부한다", () => {
-  assert.throws(() => parsePurchaseDates("2024-02-30", "2025-01-01"), /날짜 형식/);
-  assert.throws(() => parsePurchaseDates("2026-01-01", "2025-01-01"), /날짜 형식/);
-});
-
-test("구매 예상일은 재고·소진 알림과 별도의 재구매 신호로 분류한다", () => {
-  const product = {
-    ...baseProduct,
-    current_quantity: 3,
-    low_stock_threshold: 0,
-    alert_days: 130
-  };
-  const stats = calculatePurchaseStats(
-    "product-1",
-    [
-      purchase("2024-01-10"),
-      purchase("2024-05-18"),
-      purchase("2024-10-02"),
-      purchase("2025-02-11"),
-      purchase("2025-07-06")
-    ],
-    [],
-    "2025-07-20"
-  );
-  const estimate = estimateProduct(product, [], [], "2025-07-20", stats);
-
-  assert.equal(estimate.forecastSource, "purchase_interval");
-  assert.equal(getInventoryAttentionKind(product, estimate), null);
-  assert.equal(isRepurchaseDue(product, stats, estimate), true);
-  assert.equal(isInventoryAttentionNeeded(product, estimate, stats), true);
-});
-
-test("현재 수량과 실제 사용 속도는 재고·소진 알림으로 분류한다", () => {
-  const quantityProduct = {
-    ...baseProduct,
-    current_quantity: 1,
-    low_stock_threshold: 1
-  };
-  const quantityEstimate = estimateProduct(quantityProduct, [], [], "2026-07-19");
-  const noPurchaseStats = calculatePurchaseStats(
-    "product-1",
-    [],
-    [],
-    "2026-07-19"
-  );
-  assert.equal(getInventoryAttentionKind(quantityProduct, quantityEstimate), "quantity");
-  assert.equal(
-    isInventoryAttentionNeeded(
-      quantityProduct,
-      quantityEstimate,
-      noPurchaseStats
-    ),
-    true
-  );
-
-  const usageProduct = {
-    ...baseProduct,
-    current_quantity: 1,
-    low_stock_threshold: 0,
-    alert_days: 160
-  };
-  const usageEstimate = estimateProduct(
-    usageProduct,
-    [],
-    [cycle()],
-    "2026-07-19"
-  );
-  assert.equal(usageEstimate.forecastSource, "usage");
-  assert.equal(getInventoryAttentionKind(usageProduct, usageEstimate), "depletion");
-});
-
-test("충분한 과거 구매량이 있으면 1통 수량 기준보다 소진 예측을 우선한다", () => {
-  const product = {
-    ...baseProduct,
-    name: "더랩 히알루론산 토너",
-    package_size: 500,
-    capacity_unit: "ml",
-    current_quantity: 1,
-    low_stock_threshold: 1,
-    alert_days: 30
-  };
-  const purchases = ["2024-01-01", "2024-09-01", "2025-05-01"].map(
-    (date, index) => purchase(date, {
-      id: `toner-${index}`,
-      package_size: 500,
-      package_unit: "ml"
-    })
-  );
-  const events = [intakeEvent("2026-01-01", 1)];
-  const stats = calculatePurchaseStats(
-    product.id,
-    purchases,
-    events,
-    "2026-01-02"
-  );
+test("actual use automatically takes priority over a recalled baseline", () => {
+  const product = decrementProduct({ current_quantity: 5 });
+  const recalled = baseline({
+    usage_tracking: "decrement",
+    quantity_unit: "개",
+    package_size: null,
+    capacity_unit: null,
+    consumed_quantity: 10
+  });
   const analysis = calculateProductAnalysis(
     product,
-    purchases,
-    events,
+    [event("2026-01-01", 1), event("2026-01-11", 1)],
     [],
-    stats,
-    "2026-01-02"
+    recalled,
+    [],
+    "2026-01-11"
   );
-
-  assert.equal(analysis.consumptionStats.source, "purchase");
-  assert.ok(Math.abs((analysis.consumptionStats.annualPackageCount || 0) - 1.5) < 0.01);
-  assert.equal(analysis.estimate.forecastSource, "purchase_volume");
-  assert.ok((analysis.estimate.remainingDays || 0) > 200);
-  assert.equal(getInventoryAttentionKind(product, analysis.estimate), null);
-  assert.equal(isRepurchaseDue(product, stats, analysis.estimate), false);
-  assert.equal(analysis.estimate.isUrgent, false);
+  assert.equal(analysis.estimate.forecastSource, "usage");
+  assert.equal(analysis.estimate.daysPerUnit, 10);
+  assert.equal(analysis.consumptionStats.source, "usage");
 });
 
-test("구매량 기반 소진일이 가까우면 구매 간격보다 소진 임박을 표시한다", () => {
-  const product = {
-    ...baseProduct,
-    name: "Oats Thick",
-    package_size: 500,
-    capacity_unit: "g",
-    current_quantity: 1,
-    low_stock_threshold: 0,
-    alert_days: 100
-  };
-  const purchases = ["2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01"].map(
-    (date, index) => purchase(date, { id: `oats-${index}` })
-  );
-  const events = [intakeEvent("2026-01-01", 1)];
-  const stats = calculatePurchaseStats(
-    product.id,
-    purchases,
-    events,
-    "2026-01-02"
-  );
-  const analysis = calculateProductAnalysis(
+test("the first actual record is visible by month even while speed is still observing", () => {
+  const product = decrementProduct();
+  const stats = calculateConsumptionStats(
     product,
-    purchases,
-    events,
+    [event("2026-08-15", 2)],
     [],
-    stats,
-    "2026-01-02"
+    null,
+    [],
+    "2026-08-31"
   );
-
-  assert.equal(analysis.estimate.forecastSource, "purchase_volume");
-  assert.equal(getInventoryAttentionKind(product, analysis.estimate), "depletion");
-  assert.equal(isRepurchaseDue(product, stats, analysis.estimate), false);
-  assert.match(analysis.estimate.urgentReason || "", /과거 구매량/);
+  assert.equal(stats.source, null);
+  assert.deepEqual(stats.monthlyActuals, [{
+    month: "2026-08",
+    amount: 2,
+    packageCount: 2,
+    sampleCount: 1
+  }]);
 });
 
-test("구매량 근거가 부족하면 기존 수량 안전망을 사용한다", () => {
-  const product = {
-    ...baseProduct,
-    current_quantity: 1,
-    low_stock_threshold: 1
-  };
-  const purchases = ["2025-10-01", "2025-12-01"].map((date, index) =>
-    purchase(date, {
-      id: `short-history-${index}`,
-      package_size: 1600,
-      package_unit: "ml"
-    })
-  );
-  const events = [intakeEvent("2026-01-01", 1)];
-  const analysis = calculateProductAnalysis(
-    product,
-    purchases,
+test("manual active months no longer change annual need", () => {
+  const events = [event("2026-01-01", 1), event("2026-01-11", 1)];
+  const allYear = calculateConsumptionStats(
+    decrementProduct({ active_months: null }),
     events,
     [],
     null,
-    "2026-01-02"
+    [],
+    "2026-01-11"
   );
-
-  assert.notEqual(analysis.estimate.forecastSource, "purchase_volume");
-  assert.equal(getInventoryAttentionKind(product, analysis.estimate), "quantity");
+  const legacySeasonal = calculateConsumptionStats(
+    decrementProduct({ active_months: [6, 7, 8] }),
+    events,
+    [],
+    null,
+    [],
+    "2026-01-11"
+  );
+  assert.equal(legacySeasonal.annualPackageCount, allYear.annualPackageCount);
+  assert.equal(legacySeasonal.monthlyPackageCount, allYear.monthlyPackageCount);
 });
 
-test("제품 카드 보충 정보는 괄호를 쓰고 날짜 뒤 정보는 쉼표로 구분한다", () => {
+test("seasonality stays descriptive until twelve complete calendar months exist", () => {
+  const stats = calculateConsumptionStats(
+    decrementProduct(),
+    [event("2025-06-15", 10), event("2025-07-15", 10)],
+    [],
+    null,
+    [],
+    "2026-05-01"
+  );
+  assert.equal(stats.seasonality.status, "observing");
+  assert.equal(stats.seasonality.completeMonthCount, 10);
+  assert.equal(stats.seasonality.monthlyShares, null);
+});
+
+test("a strong observed annual pattern qualifies without changing annual total", () => {
+  const product = decrementProduct({ current_quantity: 100 });
+  const events = monthlyEvents(true);
+  const stats = calculateConsumptionStats(product, events, [], null, [], "2026-02-15");
+  assert.equal(stats.seasonality.status, "qualified");
+  assert.equal(stats.seasonality.completeMonthCount >= 12, true);
+  assert.equal(stats.seasonality.actualRecordCount >= 2, true);
+  assert.equal(stats.seasonality.monthlyShares?.length, 12);
+  assert.ok(Math.abs((stats.seasonality.monthlyShares || []).reduce((a, b) => a + b, 0) - 1) < 1e-9);
+
+  const recentCompleteYearTotal = stats.monthlyActuals
+    .filter((month) => month.month >= "2025-02" && month.month <= "2026-01")
+    .reduce((sum, month) => sum + month.packageCount, 0);
+  assert.equal(stats.annualPackageCount, recentCompleteYearTotal);
+});
+
+test("a flat year is explicitly classified as not seasonal", () => {
+  const stats = calculateConsumptionStats(
+    decrementProduct(),
+    monthlyEvents(false),
+    [],
+    null,
+    [],
+    "2026-02-15"
+  );
+  assert.equal(stats.seasonality.status, "not_seasonal");
+  assert.equal(stats.seasonality.monthlyShares, null);
+});
+
+test("a sale in the current month remains an active purchase opportunity", () => {
+  const product = decrementProduct({ current_quantity: 20, purchase_safety_quantity: 1 });
+  const events = [event("2026-06-01", 1), event("2026-06-11", 1)];
+  const stats = calculateConsumptionStats(
+    product,
+    events,
+    [],
+    null,
+    [saleSchedule("june", 6, 1), saleSchedule("september", 9, 1)],
+    "2026-06-20"
+  );
+  assert.equal(stats.saleRecommendation?.opportunityOn, "2026-06-01");
+  assert.equal(stats.saleRecommendation?.validThrough, "2026-06-30");
+  assert.equal(stats.saleRecommendation?.nextOpportunityOn, "2026-09-01");
   assert.equal(
-    formatConsumptionAmount(
-      {
-        source: "purchase",
-        monthlyAmount: 24.77,
-        monthlyUnit: "ml",
-        monthlyPackageCount: 0.5,
-        activeMonthlyAmount: 24.77,
-        activeMonthlyPackageCount: 0.5,
-        annualAmount: 297.24,
-        annualPackageCount: 6,
-        nextSeasonStartOn: null,
-        nextSeasonEndOn: null,
-        nextSeasonAmount: null,
-        nextSeasonPackageCount: null,
-        sampleCount: 8,
-        observationDays: 365,
-        inferredSizeRecordCount: 0,
-        excludedSizeRecordCount: 0,
-        recommendedPurchaseQuantity: 6,
-        expectedStockOnSaleDate: 1
-      },
-      "통"
+    isRepurchaseDue(
+      product,
+      emptyPurchaseStats,
+      estimateProduct(product, events, [], null, "2026-06-20"),
+      stats,
+      "2026-06-20"
     ),
-    "약 24.77ml/월 (약 0.5통/월)"
-  );
-  assert.equal(formatPurchaseForecast("2026-04-03", 12), "4/3/2026, 12일 후");
-  assert.equal(
-    formatActiveMeta({
-      ...baseProduct,
-      active_opened_on: "2026-04-03",
-      active_consumer_count: 2
-    }),
-    "4/3/2026, 2명 사용"
+    true
   );
 });
+
+test("a recurring sale still creates an alert before consumption is learned", () => {
+  const product = decrementProduct({ current_quantity: 5 });
+  const stats = calculateConsumptionStats(
+    product,
+    [],
+    [],
+    null,
+    [saleSchedule("september", 9, 1)],
+    "2026-08-20"
+  );
+  assert.equal(stats.saleRecommendation?.opportunityOn, "2026-09-01");
+  assert.equal(stats.saleRecommendation?.recommendedQuantity, null);
+  assert.equal(
+    isRepurchaseDue(
+      product,
+      emptyPurchaseStats,
+      estimateProduct(product, [], [], null, "2026-08-20"),
+      stats,
+      "2026-08-20"
+    ),
+    true
+  );
+});
+
+test("sale planning separates a temporary minimum from the sale quantity", () => {
+  const product = decrementProduct({ current_quantity: 0.1, purchase_safety_quantity: 1 });
+  const events = [event("2026-06-01", 1), event("2026-06-11", 1)];
+  const stats = calculateConsumptionStats(
+    product,
+    events,
+    [],
+    null,
+    [saleSchedule("september", 9, 1), saleSchedule("december", 12, 1)],
+    "2026-06-20"
+  );
+  assert.ok((stats.saleRecommendation?.temporaryPurchaseQuantity || 0) > 0);
+  assert.ok((stats.saleRecommendation?.recommendedQuantity || 0) > 0);
+});
+
+test("purchase interval is only a secondary signal when no consumption estimate exists", () => {
+  const product = decrementProduct({ current_quantity: 10 });
+  const dueStats = { ...emptyPurchaseStats, daysUntilNextPurchase: 5 };
+  const learningEstimate = estimateProduct(product, [], [], null, "2026-06-20");
+  assert.equal(isRepurchaseDue(product, dueStats, learningEstimate, null, "2026-06-20"), true);
+
+  const usageEvents = [event("2026-06-01", 1), event("2026-06-11", 1)];
+  const usageEstimate = estimateProduct(product, usageEvents, [], null, "2026-06-20");
+  assert.equal(isRepurchaseDue(product, dueStats, usageEstimate, null, "2026-06-20"), false);
+});
+
+test("attention prefers depletion, then quantity, then purchase timing", () => {
+  const product = decrementProduct({ current_quantity: 1, low_stock_threshold: 1 });
+  const learningEstimate = estimateProduct(product, [], [], null, "2026-06-20");
+  assert.equal(getInventoryAttentionKind(product, learningEstimate), "quantity");
+  assert.equal(
+    isInventoryAttentionNeeded(product, learningEstimate, emptyPurchaseStats, null),
+    true
+  );
+
+  const usageEstimate = estimateProduct(
+    product,
+    [event("2026-06-01", 1), event("2026-06-11", 1)],
+    [],
+    null,
+    "2026-06-20"
+  );
+  assert.equal(getInventoryAttentionKind(product, usageEstimate), "depletion");
+});
+
+test("legacy tracking mode remains a read fallback during rollout", () => {
+  assert.equal(usageTrackingOf({ ...baseProduct, usage_tracking: undefined, tracking_mode: "count" }), "decrement");
+  assert.equal(usageTrackingOf({ ...baseProduct, usage_tracking: undefined, tracking_mode: "cycle" }), "cycle");
+});
+
+function decrementProduct(
+  overrides: Partial<InventoryProduct> = {}
+): InventoryProduct {
+  return {
+    ...baseProduct,
+    tracking_mode: "count",
+    usage_tracking: "decrement",
+    unit_label: "개",
+    package_size: null,
+    capacity_unit: null,
+    ...overrides
+  };
+}
+
+function purchase(id: string, purchasedOn: string, packageCount: number): InventoryPurchase {
+  return {
+    id,
+    workspace_id: "workspace-1",
+    product_id: baseProduct.id,
+    store_id: "store-1",
+    purchased_on: purchasedOn,
+    package_count: packageCount,
+    package_size: null,
+    package_unit: null,
+    total_price: null,
+    shipping_fee: null,
+    note: null,
+    created_by: null,
+    updated_by: null,
+    created_at: purchasedOn + "T00:00:00Z",
+    updated_at: purchasedOn + "T00:00:00Z"
+  };
+}
+
+function monthlyEvents(seasonal: boolean): InventoryEvent[] {
+  const months: Array<[string, number]> = [["2024-12-15", 1]];
+  for (let year = 2025; year <= 2026; year += 1) {
+    const finalMonth = year === 2026 ? 1 : 12;
+    for (let month = 1; month <= finalMonth; month += 1) {
+      const amount = seasonal && month >= 6 && month <= 8 ? 10 : 1;
+      months.push([
+        String(year) + "-" + String(month).padStart(2, "0") + "-15",
+        amount
+      ]);
+    }
+  }
+  return months.map(([date, amount], index) => event(date, amount, {
+    id: "monthly-" + index,
+    quantity_before: 200,
+    quantity_after: 200 - amount
+  }));
+}

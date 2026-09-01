@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import {
   formatDate,
   formatQuantity,
+  isStockInitialized,
+  todayIso
+} from "../lib/inventory";
+import {
   getInventoryAttentionKind,
   isRepurchaseDue,
-  isStockInitialized
-} from "../lib/inventory";
+  usageTrackingOf
+} from "../lib/observationAnalysis";
 import { getProductStoreIds } from "../lib/inventoryStores";
 import {
   formatConsumptionAmount,
@@ -100,19 +104,21 @@ export function ProductCard({
   const productCycleCount = cycles.filter((cycle) => cycle.product_id === product.id).length;
   const shoppingMallCount = getProductStoreIds(product)
     .filter((storeId) => stores.some((store) => store.id === storeId)).length;
-  const isCycle = product.tracking_mode === "cycle";
+  const isCycle = usageTrackingOf(product) === "cycle";
   const stockInitialized = isStockInitialized(product);
   const hasActiveProduct = Boolean(product.active_opened_on);
   const currentMeta = stockInitialized
     ? `${formatQuantity(product.current_quantity)}${product.unit_label}`
     : "재고 미설정";
   const inventoryAttentionKind = getInventoryAttentionKind(product, estimate);
-  const repurchaseDue = isRepurchaseDue(product, purchaseStats, estimate);
-  const hasDepletionForecast =
-    estimate.forecastSource === "usage" ||
-    estimate.forecastSource === "purchase_volume";
-  const isPurchaseVolumeForecast =
-    estimate.forecastSource === "purchase_volume";
+  const repurchaseDue = isRepurchaseDue(
+    product,
+    purchaseStats,
+    estimate,
+    consumptionStats
+  );
+  const hasDepletionForecast = Boolean(estimate.forecastSource);
+  const isRecalledForecast = estimate.forecastSource === "recalled_baseline";
   const statusClass = inventoryAttentionKind
     ? "urgent"
     : repurchaseDue
@@ -141,17 +147,17 @@ export function ProductCard({
   const statusDescription = inventoryAttentionKind === "quantity"
     ? `재고가 ${formatQuantity(product.low_stock_threshold)}${product.unit_label} 이하입니다.`
     : inventoryAttentionKind === "depletion" && estimate.remainingDays !== null
-      ? isPurchaseVolumeForecast
-        ? `과거 구매량으로 추정하면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
+      ? isRecalledForecast
+        ? `회상 소비 기준으로 추정하면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
         : `현재 사용 속도라면 약 ${Math.max(0, Math.round(estimate.remainingDays))}일 후 재고가 소진됩니다.`
-      : repurchaseDue && (product.next_sale_on || purchaseStats.nextPurchaseDate)
-        ? product.next_sale_on
-          ? `다음 세일 ${formatDate(product.next_sale_on)}에 맞춰 구매를 준비할 시기입니다.`
+      : repurchaseDue && (consumptionStats.saleRecommendation || purchaseStats.nextPurchaseDate)
+        ? consumptionStats.saleRecommendation
+          ? `${consumptionStats.saleRecommendation.scheduleName} 구매 기회를 확인할 시기입니다.`
           : formatPurchaseForecast(purchaseStats.nextPurchaseDate!, purchaseStats.daysUntilNextPurchase)
         : stockInitialized
           ? hasDepletionForecast && estimate.remainingDays !== null
-            ? isPurchaseVolumeForecast
-              ? `과거 구매량 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
+            ? isRecalledForecast
+              ? `회상 소비 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
               : `사용 속도 기준 약 ${Math.max(0, Math.round(estimate.remainingDays))}일분이 남았습니다.`
             : isCycle
               ? "개봉일과 다 쓴 날 기록을 쌓으면 실제 사용 기간을 계산합니다."
@@ -222,7 +228,7 @@ export function ProductCard({
             </div>
             <div className="key-statistics-grid">
               <Metric
-                label={product.active_months ? "사용 월 평균" : "월평균 소비량"}
+                label="월평균 소비량"
                 value={formatConsumptionAmount(consumptionStats, product.unit_label)}
               />
               <Metric
@@ -235,14 +241,22 @@ export function ProductCard({
                 )}
               />
             </div>
-            {product.next_sale_on && product.purchase_coverage_months ? (
+            {consumptionStats.saleRecommendation ? (
               <div className="sale-recommendation">
-                <span>다음 세일 구매 추천</span>
+                <span>{consumptionStats.saleRecommendation.scheduleName} 구매 추천</span>
                 <strong>
-                  {formatDate(product.next_sale_on)}, {consumptionStats.recommendedPurchaseQuantity === null
-                    ? "소비량 계산 후 추천"
-                    : `${product.purchase_coverage_months}개월치 ${consumptionStats.recommendedPurchaseQuantity}${product.unit_label}`}
+                  {saleOpportunityLabel(
+                    consumptionStats.saleRecommendation.opportunityOn,
+                    consumptionStats.saleRecommendation.validThrough
+                  )}, {consumptionStats.saleRecommendation.recommendedQuantity === null
+                    ? "소비량 계산 후 수량 추천"
+                    : `${consumptionStats.saleRecommendation.recommendedQuantity}${product.unit_label}`}
                 </strong>
+                {consumptionStats.saleRecommendation.temporaryPurchaseQuantity ? (
+                  <small>
+                    그 전에 재고가 부족해 지금 최소 {consumptionStats.saleRecommendation.temporaryPurchaseQuantity}{product.unit_label} 필요
+                  </small>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -359,6 +373,14 @@ function Metric({
 
 function consumptionSourceLabel(stats: ConsumptionStats): string {
   if (stats.source === "usage") return "실제 사용 기록 기준";
-  if (stats.source === "purchase") return "과거 구매량 기준";
+  if (stats.source === "recalled_baseline") return "회상 소비 기준 임시 추정";
   return "소비량 학습 중";
+}
+
+function saleOpportunityLabel(opportunityOn: string, validThrough: string): string {
+  const currentDate = todayIso();
+  if (opportunityOn <= currentDate && currentDate <= validThrough) {
+    return `${formatDate(validThrough)}까지`;
+  }
+  return formatDate(opportunityOn);
 }

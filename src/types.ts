@@ -1,4 +1,5 @@
 export type TrackingMode = "count" | "cycle";
+export type UsageTracking = "decrement" | "cycle";
 export type InventoryEventType =
   | "intake"
   | "use"
@@ -34,6 +35,8 @@ export interface InventoryProduct {
   name: string;
   category?: ProductCategory;
   tracking_mode: TrackingMode;
+  usage_tracking?: UsageTracking;
+  usage_tracking_changed_on?: string | null;
   unit_label: string;
   package_size: number | null;
   capacity_unit: string | null;
@@ -105,21 +108,68 @@ export interface InventoryPurchase {
   updated_at: string;
 }
 
+export interface InventoryConsumptionBaseline {
+  id: string;
+  workspace_id: string;
+  product_id: string;
+  usage_tracking: UsageTracking;
+  started_on: string;
+  ended_on: string;
+  consumed_quantity: number;
+  quantity_unit: string;
+  package_size: number | null;
+  capacity_unit: string | null;
+  consumer_count: number;
+  note: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryProductSaleSchedule {
+  id: string;
+  workspace_id: string;
+  product_id: string;
+  store_id: string | null;
+  name: string;
+  sale_month: number;
+  sale_day: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductDraft {
   name: string;
   category: ProductCategory;
-  trackingMode: TrackingMode;
+  usageTracking: UsageTracking;
   unitLabel: string;
   lowStockThreshold: string;
   alertDays: string;
   packageSize: string;
   capacityUnit: string;
   storeIds: string[];
-  nextSaleOn: string;
-  purchaseCoverageMonths: string;
   purchaseSafetyQuantity: string;
-  activeMonths: number[];
+  saleSchedules: SaleScheduleDraft[];
   notes: string;
+}
+
+export interface SaleScheduleDraft {
+  id?: string;
+  storeId: string;
+  name: string;
+  saleMonth: string;
+  saleDay: string;
+}
+
+export interface ConsumptionBaselineDraft {
+  startedOn: string;
+  endedOn: string;
+  consumedQuantity: string;
+  consumerCount: string;
+  note: string;
 }
 
 export type InventoryAction = InventoryEventType | "stock_check";
@@ -167,7 +217,7 @@ export interface ProductEstimate {
   isUrgent: boolean;
   urgentReason: string | null;
   isLearning: boolean;
-  forecastSource: "usage" | "purchase_volume" | "purchase_interval" | null;
+  forecastSource: "usage" | "recalled_baseline" | null;
   remainingDays: number | null;
   estimatedOutDate: string | null;
   expectedCycleDays: number | null;
@@ -192,23 +242,44 @@ export interface PurchaseStats {
   daysUntilNextPurchase: number | null;
 }
 
+export interface MonthlyConsumptionActual {
+  month: string;
+  amount: number;
+  packageCount: number;
+  sampleCount: number;
+}
+
+export interface SeasonalityStats {
+  status: "observing" | "not_seasonal" | "qualified";
+  completeMonthCount: number;
+  actualRecordCount: number;
+  highestRollingThreeMonthAverage: number | null;
+  lowestRollingThreeMonthAverage: number | null;
+  monthlyShares: number[] | null;
+}
+
+export interface SaleRecommendation {
+  scheduleId: string;
+  scheduleName: string;
+  storeId: string | null;
+  opportunityOn: string;
+  validThrough: string;
+  nextOpportunityOn: string;
+  expectedStockOnOpportunity: number | null;
+  recommendedQuantity: number | null;
+  temporaryPurchaseQuantity: number | null;
+}
+
 export interface ConsumptionStats {
-  source: "usage" | "purchase" | null;
+  source: "usage" | "recalled_baseline" | null;
   monthlyAmount: number | null;
   monthlyUnit: string | null;
   monthlyPackageCount: number | null;
-  activeMonthlyAmount: number | null;
-  activeMonthlyPackageCount: number | null;
   annualAmount: number | null;
   annualPackageCount: number | null;
-  nextSeasonStartOn: string | null;
-  nextSeasonEndOn: string | null;
-  nextSeasonAmount: number | null;
-  nextSeasonPackageCount: number | null;
   sampleCount: number;
   observationDays: number | null;
-  inferredSizeRecordCount: number;
-  excludedSizeRecordCount: number;
-  recommendedPurchaseQuantity: number | null;
-  expectedStockOnSaleDate: number | null;
+  monthlyActuals: MonthlyConsumptionActual[];
+  seasonality: SeasonalityStats;
+  saleRecommendation: SaleRecommendation | null;
 }

@@ -27,6 +27,7 @@ export function InventoryDialogs({
         <ProductEditor
           product={controller.editorProduct}
           stores={inventory.stores}
+          saleSchedules={inventory.saleSchedules}
           busy={busy}
           canDelete={controller.editorCanDelete}
           onClose={() => controller.setEditorProduct(undefined)}
@@ -142,7 +143,11 @@ export function InventoryDialogs({
       {controller.learningStatusOpen ? (
         <LearningStatusDialog
           products={inventory.products}
+          baselines={inventory.consumptionBaselines}
           view={view}
+          busy={busy}
+          onSaveBaseline={controller.saveConsumptionBaseline}
+          onDeleteBaseline={controller.deleteConsumptionBaseline}
           onClose={() => controller.setLearningStatusOpen(false)}
         />
       ) : null}

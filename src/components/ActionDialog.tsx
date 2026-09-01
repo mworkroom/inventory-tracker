@@ -5,6 +5,7 @@ import {
   isStockInitialized,
   todayIso
 } from "../lib/inventory";
+import { usageTrackingOf } from "../lib/observationAnalysis";
 import type {
   InventoryAction,
   InventoryActionDraft,
@@ -33,7 +34,7 @@ export function ActionDialog({
   );
   const [formError, setFormError] = useState<string | null>(null);
   const content = useMemo(() => getActionContent(action, product), [action, product]);
-  const isCycle = product.tracking_mode === "cycle";
+  const isCycle = usageTrackingOf(product) === "cycle";
   const stockInitialized = isStockInitialized(product);
   const stockCheckTarget = Number(draft.targetQuantity);
   const stockCheckAmount =
@@ -271,7 +272,7 @@ function makeDraft(
 }
 
 function getActionContent(action: InventoryAction, product: InventoryProduct) {
-  const isCycle = product.tracking_mode === "cycle";
+  const isCycle = usageTrackingOf(product) === "cycle";
   const stockInitialized = isStockInitialized(product);
 
   switch (action) {

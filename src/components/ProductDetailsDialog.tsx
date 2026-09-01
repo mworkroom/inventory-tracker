@@ -8,13 +8,12 @@ import {
 } from "../lib/inventory";
 import {
   formatActiveMeta,
-  formatActiveMonths,
-  formatAnnualizedMonthlyAmount,
   formatConsumptionAmount,
   formatConsumptionTotal,
   formatDecimal,
   formatHistoryRange
 } from "../lib/productPresentation";
+import { usageTrackingOf } from "../lib/observationAnalysis";
 import type {
   ConsumptionStats,
   InventoryEvent,
@@ -78,7 +77,7 @@ export function ProductDetailsDialog({
     .filter((cycle) => cycle.product_id === product.id)
     .sort((a, b) => b.finished_on.localeCompare(a.finished_on));
   const storeById = new Map(stores.map((store) => [store.id, store.name]));
-  const isCycle = product.tracking_mode === "cycle";
+  const isCycle = usageTrackingOf(product) === "cycle";
   const stockInitialized = isStockInitialized(product);
 
   useEffect(() => {
@@ -227,16 +226,13 @@ function StatisticsPanel({
   stockInitialized: boolean;
   isCycle: boolean;
 }) {
-  const hasDepletionForecast =
-    estimate.forecastSource === "usage" || estimate.forecastSource === "purchase_volume";
-  const depletionForecastStatus =
-    estimate.forecastSource === "usage"
-      ? "실제 사용 기준"
-      : estimate.forecastSource === "purchase_volume"
-        ? "구매량 추정"
-        : "사용 기록 학습 중";
-  const depletionForecastSuffix =
-    estimate.forecastSource === "purchase_volume" ? " (과거 구매량 추정)" : "";
+  const hasDepletionForecast = Boolean(estimate.forecastSource);
+  const depletionForecastStatus = estimate.forecastSource === "usage"
+    ? "실제 사용 기준"
+    : estimate.forecastSource === "recalled_baseline"
+      ? "회상 기준 임시 추정"
+      : "사용 기록 관찰 중";
+  const sale = consumptionStats.saleRecommendation;
 
   return (
     <div className="details-statistics">
@@ -255,7 +251,9 @@ function StatisticsPanel({
                 label="평균 사용 주기"
                 value={estimate.expectedCycleDays === null
                   ? "첫 소진 기록을 기다리는 중"
-                  : `${formatApproxDays(estimate.expectedCycleDays)} (최근 ${estimate.cycleSampleCount}회 기준)`}
+                  : estimate.forecastSource === "recalled_baseline"
+                    ? `${formatApproxDays(estimate.expectedCycleDays)} (회상 기준 임시 추정)`
+                    : `${formatApproxDays(estimate.expectedCycleDays)} (최근 ${estimate.cycleSampleCount}회 기준)`}
               />
               {estimate.perPersonDailyCapacity !== null && product.capacity_unit ? (
                 <InfoRow
@@ -275,7 +273,7 @@ function StatisticsPanel({
           <InfoRow
             label="예상 소진 시기"
             value={hasDepletionForecast && estimate.estimatedOutDate
-              ? `${formatDate(estimate.estimatedOutDate)}, ${formatApproxDays(estimate.remainingDays)}${depletionForecastSuffix}`
+              ? `${formatDate(estimate.estimatedOutDate)}, ${formatApproxDays(estimate.remainingDays)}`
               : stockInitialized
                 ? isCycle
                   ? "완료된 사용 주기를 기록하면 계산"
@@ -295,8 +293,8 @@ function StatisticsPanel({
           <span className="forecast-status neutral">
             {consumptionStats.source === "usage"
               ? "실제 사용 기록 기준"
-              : consumptionStats.source === "purchase"
-                ? "과거 구매량 기준"
+              : consumptionStats.source === "recalled_baseline"
+                ? "회상 소비 기준"
                 : "소비량 학습 전"}
           </span>
         </div>
@@ -319,27 +317,10 @@ function StatisticsPanel({
               ? `${formatDate(purchaseStats.latestIntakeOn)}, ${formatQuantity(purchaseStats.latestIntakeQuantity)}${product.unit_label}`
               : "아직 없음"}
           />
-          {product.active_months ? (
-            <>
-              <InfoRow
-                label="사용 시기"
-                value={formatActiveMonths(product)}
-              />
-              <InfoRow
-                label="연평균 월 환산량"
-                value={formatAnnualizedMonthlyAmount(consumptionStats, product.unit_label)}
-              />
-              <InfoRow
-                label="사용 월 평균 소비량"
-                value={formatConsumptionAmount(consumptionStats, product.unit_label)}
-              />
-            </>
-          ) : (
-            <InfoRow
-              label="월평균 소비량"
-              value={formatConsumptionAmount(consumptionStats, product.unit_label)}
-            />
-          )}
+          <InfoRow
+            label="월평균 소비량"
+            value={formatConsumptionAmount(consumptionStats, product.unit_label)}
+          />
           <InfoRow
             label="1년 예상 필요량"
             value={formatConsumptionTotal(
@@ -349,23 +330,22 @@ function StatisticsPanel({
               product.unit_label
             )}
           />
-          {consumptionStats.nextSeasonStartOn && consumptionStats.nextSeasonEndOn ? (
+          <InfoRow
+            label="계절성 자동 분석"
+            value={seasonalityLabel(consumptionStats)}
+          />
+          {sale ? (
             <InfoRow
-              label="사용 시즌 예상량"
-              value={`${formatDate(consumptionStats.nextSeasonStartOn)}–${formatDate(consumptionStats.nextSeasonEndOn)}, ${formatConsumptionTotal(
-                consumptionStats.nextSeasonAmount,
-                consumptionStats.nextSeasonPackageCount,
-                consumptionStats.monthlyUnit,
-                product.unit_label
-              )}`}
+              label={`${sale.scheduleName} 구매 추천`}
+              value={`${formatDate(sale.opportunityOn)}, ${sale.recommendedQuantity === null
+                ? "소비량 계산 후 수량 추천"
+                : `${sale.recommendedQuantity}${product.unit_label}`} · 다음 기회 ${formatDate(sale.nextOpportunityOn)}까지`}
             />
           ) : null}
-          {product.next_sale_on && product.purchase_coverage_months ? (
+          {sale?.temporaryPurchaseQuantity ? (
             <InfoRow
-              label="다음 세일 구매 추천"
-              value={consumptionStats.recommendedPurchaseQuantity === null
-                ? `${formatDate(product.next_sale_on)}, 소비량을 계산한 뒤 추천`
-                : `${formatDate(product.next_sale_on)}, ${product.purchase_coverage_months}개월치 ${consumptionStats.recommendedPurchaseQuantity}${product.unit_label}`}
+              label="지금 살 최소 수량"
+              value={`${sale.temporaryPurchaseQuantity}${product.unit_label} · 세일 전에 재고 부족 예상`}
             />
           ) : null}
           <InfoRow
@@ -375,17 +355,49 @@ function StatisticsPanel({
               : `${formatApproxDays(purchaseStats.medianIntervalDays)} (${purchaseStats.intervalSampleCount}개 간격 기준)`}
           />
         </dl>
-        {consumptionStats.source === "purchase" ? (
+        {consumptionStats.source === "recalled_baseline" ? (
           <p className="forecast-method-note">
-            현재 재고 추적을 시작하기 전 구매 기록은 모두 사용한 것으로 보고 계산했습니다.
-            {consumptionStats.inferredSizeRecordCount > 0
-              ? ` 용량이 비어 있던 ${consumptionStats.inferredSizeRecordCount}건은 현재 제품 용량을 적용했습니다.`
-              : ""}
+            실제 사용 기록이 계산 조건을 채우면 회상 소비 기준보다 실제 기록을 자동으로 우선합니다.
           </p>
         ) : null}
       </section>
+
+      <section className="forecast-section monthly-actual-section">
+        <div className="forecast-section-heading">
+          <h3>월별 실제 소비</h3>
+          <span className="forecast-status neutral">구매·회상 기준 제외</span>
+        </div>
+        {consumptionStats.monthlyActuals.length ? (
+          <dl className="product-info forecast-info">
+            {consumptionStats.monthlyActuals.slice(0, 12).map((month) => (
+              <InfoRow
+                key={month.month}
+                label={month.month.replace("-", ".")}
+                value={formatConsumptionTotal(
+                  month.amount,
+                  month.packageCount,
+                  consumptionStats.monthlyUnit || product.unit_label,
+                  product.unit_label
+                )}
+              />
+            ))}
+          </dl>
+        ) : (
+          <p className="history-empty">아직 월별로 표시할 실제 사용 기록이 없습니다.</p>
+        )}
+      </section>
     </div>
   );
+}
+
+function seasonalityLabel(stats: ConsumptionStats): string {
+  if (stats.seasonality.status === "qualified") {
+    return "반복 계절 패턴을 소진·세일 예측에 반영 중";
+  }
+  if (stats.seasonality.status === "not_seasonal") {
+    return "최근 완전한 12개월에서 뚜렷한 계절 차이 없음";
+  }
+  return `관찰 중 · 완전한 달력 ${stats.seasonality.completeMonthCount}/12개월 · 실제 기록 ${stats.seasonality.actualRecordCount}/2`;
 }
 
 function PurchaseRecords({
@@ -498,7 +510,7 @@ function UsageRecords({
   return (
     <section className="records-panel" role="tabpanel">
       <div className="records-summary"><strong>사용 {cycles.length}건</strong></div>
-      {product.tracking_mode !== "cycle" ? (
+      {usageTrackingOf(product) !== "cycle" ? (
         <p className="history-empty">수량형 제품은 재고 탭의 사용 기록을 기준으로 계산합니다.</p>
       ) : cycles.length ? (
         <ul className="evidence-list">

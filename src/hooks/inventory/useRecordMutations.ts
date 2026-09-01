@@ -5,6 +5,7 @@ import {
   isStockInitialized,
   todayIso
 } from "../../lib/inventory";
+import { usageTrackingOf } from "../../lib/observationAnalysis";
 import { supabase } from "../../lib/supabase";
 import type {
   ActiveUsageDraft,
@@ -43,7 +44,7 @@ export function useRecordMutations({
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
         let stockCheckAmount: number | null = null;
         if (action === "stock_check") {
-          if (product.tracking_mode !== "count") {
+          if (usageTrackingOf(product) !== "decrement") {
             throw new Error("남은 수량 확인은 쓸 때마다 수량을 줄이는 제품에서만 사용할 수 있습니다.");
           }
           if (!isStockInitialized(product)) {
@@ -62,13 +63,13 @@ export function useRecordMutations({
             action === "stock_check"
               ? stockCheckAmount
               : action === "intake" || action === "use"
-                ? action === "intake" && product.tracking_mode === "cycle"
+                ? action === "intake" && usageTrackingOf(product) === "cycle"
                   ? parseRequiredInteger(draft.amount, "입고 개수")
                   : parseRequiredNumber(draft.amount, "수량")
                 : null,
           p_target_quantity:
             action === "adjustment"
-              ? product.tracking_mode === "cycle"
+              ? usageTrackingOf(product) === "cycle"
                 ? parseRequiredInteger(draft.targetQuantity, "실제 재고 개수")
                 : parseRequiredNumber(draft.targetQuantity, "실제 재고")
               : null,
@@ -90,7 +91,7 @@ export function useRecordMutations({
     (product: InventoryProduct, draft: ActiveUsageDraft) =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        if (product.tracking_mode !== "cycle" || !product.active_opened_on) {
+        if (usageTrackingOf(product) !== "cycle" || !product.active_opened_on) {
           throw new Error("현재 개봉해 사용 중인 제품만 수정할 수 있습니다.");
         }
         if (!draft.openedOn || draft.openedOn > todayIso()) {

@@ -169,7 +169,7 @@ export function PurchaseDialog({
       ? "전체 구매 기록"
       : "과거 구매 기록 수정";
   const description = mode === "history"
-    ? "이미 구매해 사용한 기록을 날짜·수량·용량과 함께 입력합니다."
+    ? "과거에 구매한 기록을 날짜·수량·용량과 함께 입력합니다."
     : mode === "list"
       ? "연도별 기록을 모두 확인하고 잘못 입력한 항목을 수정할 수 있습니다."
       : "기존에 입력한 날짜와 상세 정보를 바로잡습니다.";
@@ -208,7 +208,7 @@ export function PurchaseDialog({
         {mode === "history" ? (
           <div className="purchase-dialog-callout">
             <strong>현재 재고는 바뀌지 않습니다.</strong>
-            <span>이미 모두 사용한 과거 구매량으로 월평균 소비량을 추정합니다. 앞으로 들어온 물건은 입고로 따로 기록합니다.</span>
+            <span>가격·구매처·구매 간격을 확인하는 자료로만 사용하며 소비량 학습에는 포함하지 않습니다. 실제로 들어온 물건은 입고로 따로 기록합니다.</span>
           </div>
         ) : null}
 

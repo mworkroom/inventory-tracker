@@ -1,14 +1,21 @@
 import { useCallback } from "react";
 import { WORKSPACE_ID } from "../../config";
+import { usageTrackingOf } from "../../lib/observationAnalysis";
 import { supabase } from "../../lib/supabase";
-import type { InventoryProduct, ProductDraft } from "../../types";
+import type {
+  ConsumptionBaselineDraft,
+  InventoryConsumptionBaseline,
+  InventoryProduct,
+  ProductDraft
+} from "../../types";
 import type { InventoryRefresh, RunInventoryMutation } from "./types";
 import {
   normalizeCategory,
   parseLowStockThreshold,
   parseOptionalPositiveNumber,
   parseRequiredInteger,
-  validateCycleProductDraft
+  validateConsumptionBaselineDraft,
+  validateProductDraft
 } from "./validation";
 
 interface ProductMutationOptions {
@@ -24,36 +31,11 @@ export function useProductMutations({
     (draft: ProductDraft) =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        validateCycleProductDraft(draft);
-        const { data, error } = await supabase.rpc("create_inventory_product_with_stores", {
-          p_workspace_id: WORKSPACE_ID,
-          p_name: draft.name.trim(),
-          p_tracking_mode: draft.trackingMode,
-          p_unit_label: draft.unitLabel.trim(),
-          p_low_stock_threshold: parseLowStockThreshold(draft),
-          p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-          p_package_size:
-            draft.trackingMode === "cycle"
-              ? parseOptionalPositiveNumber(draft.packageSize, "제품 용량")
-              : null,
-          p_capacity_unit:
-            draft.trackingMode === "cycle" ? draft.capacityUnit.trim() : null,
-          p_current_consumer_count: 1,
-          p_notes: draft.notes.trim() || null,
-          p_store_ids: draft.storeIds,
-          p_category: normalizeCategory(draft.category),
-          p_next_sale_on: draft.nextSaleOn || null,
-          p_purchase_coverage_months: draft.purchaseCoverageMonths
-            ? parseRequiredInteger(draft.purchaseCoverageMonths, "구매할 기간")
-            : null,
-          p_purchase_safety_quantity: parseRequiredInteger(
-            draft.purchaseSafetyQuantity,
-            "여유 재고"
-          ),
-          p_active_months: draft.activeMonths.length === 12
-            ? null
-            : draft.activeMonths
-        });
+        validateProductDraft(draft);
+        const { data, error } = await supabase.rpc(
+          "create_inventory_product_with_schedules",
+          buildProductPayload(draft, { p_workspace_id: WORKSPACE_ID })
+        );
         if (error) throw error;
         await refresh(true);
         return data as InventoryProduct;
@@ -65,37 +47,10 @@ export function useProductMutations({
     (product: InventoryProduct, draft: ProductDraft) =>
       runMutation(async () => {
         if (!supabase) throw new Error("Supabase 연결이 없습니다.");
-        const isCycle = product.tracking_mode === "cycle";
-        const fixedDraft = { ...draft, trackingMode: product.tracking_mode };
-        validateCycleProductDraft(fixedDraft);
-
+        validateProductDraft(draft);
         const { data, error } = await supabase.rpc(
-          "update_inventory_product_with_stores",
-          {
-            p_product_id: product.id,
-            p_name: draft.name.trim(),
-            p_unit_label: draft.unitLabel.trim(),
-            p_package_size: isCycle
-              ? parseOptionalPositiveNumber(draft.packageSize, "제품 용량")
-              : null,
-            p_capacity_unit: isCycle ? draft.capacityUnit.trim() : null,
-            p_low_stock_threshold: parseLowStockThreshold(fixedDraft),
-            p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
-            p_category: normalizeCategory(draft.category),
-            p_store_ids: draft.storeIds,
-            p_notes: draft.notes.trim() || null,
-            p_next_sale_on: draft.nextSaleOn || null,
-            p_purchase_coverage_months: draft.purchaseCoverageMonths
-              ? parseRequiredInteger(draft.purchaseCoverageMonths, "구매할 기간")
-              : null,
-            p_purchase_safety_quantity: parseRequiredInteger(
-              draft.purchaseSafetyQuantity,
-              "여유 재고"
-            ),
-            p_active_months: draft.activeMonths.length === 12
-              ? null
-              : draft.activeMonths
-          }
+          "update_inventory_product_with_schedules",
+          buildProductPayload(draft, { p_product_id: product.id })
         );
         if (error) throw error;
         await refresh(true);
@@ -104,5 +59,78 @@ export function useProductMutations({
     [refresh, runMutation]
   );
 
-  return { createProduct, updateProduct };
+  const upsertConsumptionBaseline = useCallback(
+    (product: InventoryProduct, draft: ConsumptionBaselineDraft) =>
+      runMutation(async () => {
+        if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+        const usageTracking = usageTrackingOf(product);
+        const { consumedQuantity, consumerCount } =
+          validateConsumptionBaselineDraft(draft, usageTracking);
+        const { data, error } = await supabase.rpc(
+          "upsert_inventory_consumption_baseline",
+          {
+            p_product_id: product.id,
+            p_started_on: draft.startedOn,
+            p_ended_on: draft.endedOn,
+            p_consumed_quantity: consumedQuantity,
+            p_consumer_count: consumerCount,
+            p_note: draft.note.trim() || null
+          }
+        );
+        if (error) throw error;
+        await refresh(true);
+        return data as InventoryConsumptionBaseline;
+      }),
+    [refresh, runMutation]
+  );
+
+  const deleteConsumptionBaseline = useCallback(
+    (product: InventoryProduct) =>
+      runMutation(async () => {
+        if (!supabase) throw new Error("Supabase 연결이 없습니다.");
+        const { error } = await supabase.rpc(
+          "delete_inventory_consumption_baseline",
+          { p_product_id: product.id }
+        );
+        if (error) throw error;
+        await refresh(true);
+      }),
+    [refresh, runMutation]
+  );
+
+  return {
+    createProduct,
+    updateProduct,
+    upsertConsumptionBaseline,
+    deleteConsumptionBaseline
+  };
+}
+
+function buildProductPayload(
+  draft: ProductDraft,
+  identity: { p_workspace_id: string } | { p_product_id: string }
+) {
+  return {
+    ...identity,
+    p_name: draft.name.trim(),
+    p_usage_tracking: draft.usageTracking,
+    p_unit_label: draft.unitLabel.trim(),
+    p_low_stock_threshold: parseLowStockThreshold(draft),
+    p_alert_days: parseRequiredInteger(draft.alertDays, "알림 기준일"),
+    p_package_size: parseOptionalPositiveNumber(draft.packageSize, "제품 용량"),
+    p_capacity_unit: draft.capacityUnit.trim() || null,
+    p_notes: draft.notes.trim() || null,
+    p_store_ids: draft.storeIds,
+    p_category: normalizeCategory(draft.category),
+    p_purchase_safety_quantity: parseRequiredInteger(
+      draft.purchaseSafetyQuantity,
+      "여유 재고"
+    ),
+    p_sale_schedules: draft.saleSchedules.map((schedule) => ({
+      store_id: schedule.storeId,
+      name: schedule.name.trim(),
+      sale_month: parseRequiredInteger(schedule.saleMonth, "정기 세일 월"),
+      sale_day: parseRequiredInteger(schedule.saleDay, "정기 세일 일")
+    }))
+  };
 }
